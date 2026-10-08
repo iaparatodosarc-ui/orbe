@@ -1,0 +1,79 @@
+{
+  "name": "orbe",
+  "productName": "Orbe",
+  "version": "1.0.0",
+  "description": "Orbe: un asistente de IA flotante que ve la ventana donde lo pones y te ayuda en tiempo real.",
+  "main": "src/main.js",
+  "author": "Alfredo",
+  "license": "MIT",
+  "homepage": "./",
+  "keywords": [
+    "ai",
+    "assistant",
+    "claude",
+    "ollama",
+    "desktop",
+    "overlay",
+    "electron"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.orbe.desktop",
+    "productName": "Orbe",
+    "copyright": "MIT License",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "src/winutil.ps1"
+    ],
+    "publish": [
+      {
+        "provider": "github"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Orbe-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Orbe",
+      "runAfterFinish": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "artifactName": "Orbe-${version}.${ext}"
+    }
+  }
+}

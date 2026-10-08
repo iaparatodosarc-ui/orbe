@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbe — tu asistente de IA flotante</title>
+<meta name="description" content="Orbe es un asistente de IA que flota sobre tu pantalla, ve la ventana donde lo pones y te ayuda en tiempo real. Gratis y de código abierto para Windows, Android y Linux.">
+<meta property="og:title" content="Orbe — tu asistente de IA flotante">
+<meta property="og:description" content="Ponlo sobre cualquier ventana o app y pregúntale lo que quieras sobre lo que ves.">
+<meta property="og:image" content="icon-180.png">
+<link rel="icon" href="favicon.png">
+<style>
+:root{--bg:#0c0c0e;--card:#16161a;--line:#2a2a30;--fg:#f2f1ec;--mute:#8e8e95;--or:#ff5a1f;--paper:#e8e8e4;--ink:#111214}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Inter,"Segoe UI",system-ui,-apple-system,sans-serif;overflow-x:hidden}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+nav{display:flex;align-items:center;gap:12px;padding:18px 0}
+nav img{width:34px;height:34px}
+nav b{font-size:18px;letter-spacing:.3px}
+nav .sp{flex:1}
+nav a.gh{font-size:14px;color:var(--mute);text-decoration:none;border:1px solid var(--line);padding:7px 12px;border-radius:10px}
+nav a.gh:hover{color:var(--fg);border-color:var(--or)}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:50px 0 70px}
+.tag{display:inline-block;font:600 12px/1 ui-monospace,Consolas,monospace;letter-spacing:2px;color:var(--or);border:1px solid #4a2414;background:#1d0f09;padding:7px 10px;border-radius:6px;margin-bottom:18px}
+h1{font-size:clamp(42px,7vw,84px);line-height:.98;margin:0 0 18px;letter-spacing:-2px;font-weight:900}
+h1 em{font-style:normal;color:var(--or)}
+.lead{font-size:19px;color:#c9c8c3;max-width:520px;margin:0 0 28px}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:10px;background:var(--or);color:#111;font-weight:800;text-decoration:none;padding:14px 20px;border-radius:12px;border:none;font-size:16px;cursor:pointer}
+.btn.alt{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:600}
+.btn.alt:hover{border-color:var(--or)}
+.btn small{font-weight:500;opacity:.75}
+.note{font-size:13px;color:var(--mute);margin-top:12px}
+/* demo */
+.demo{position:relative;aspect-ratio:4/5;border-radius:22px;background:var(--paper);overflow:hidden;border:1px solid #333}
+.demo .win{position:absolute;inset:8% 6% 30% 6%;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);overflow:hidden}
+.demo .bar{height:26px;background:#eceae5;display:flex;gap:6px;align-items:center;padding:0 10px}
+.demo .bar i{width:9px;height:9px;border-radius:50%;background:#cfcdc6}
+.demo .ln{height:9px;border-radius:5px;background:#e3e1db;margin:12px 14px}
+.demo .err{margin:14px;padding:10px;border-left:4px solid #e0412b;background:#fdecea;font:12px ui-monospace,Consolas,monospace;color:#8a1f12}
+.demo .chat{position:absolute;left:6%;right:6%;bottom:5%;background:#121214;border-radius:14px;padding:12px 14px;color:var(--fg);font-size:13px;line-height:1.45;border:1px solid #2c2c32;opacity:0;transform:translateY(10px);transition:all .5s}
+.demo .chat.on{opacity:1;transform:none}
+.demo .chat b{color:var(--or)}
+.orb{position:absolute;width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#3a3a40,#16161a 55%,#050506);box-shadow:0 0 0 3px var(--or),0 8px 20px rgba(0,0,0,.35);transition:left 1.2s cubic-bezier(.6,0,.2,1),top 1.2s cubic-bezier(.6,0,.2,1)}
+.orb::before{content:"";position:absolute;left:14px;top:21px;width:36px;height:22px;border-radius:50%;background:#f4f2ec}
+.orb::after{content:"";position:absolute;left:25px;top:25px;width:14px;height:14px;border-radius:50%;background:#111;box-shadow:inset 0 0 0 3px var(--or)}
+/* secciones */
+section{padding:70px 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(30px,4.5vw,48px);margin:0 0 10px;letter-spacing:-1px;line-height:1.05}
+.sub{color:var(--mute);margin:0 0 34px;max-width:620px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+.card .n{font:700 13px ui-monospace,Consolas,monospace;color:var(--or);letter-spacing:2px}
+.card h3{margin:8px 0 6px;font-size:19px}
+.card p{margin:0;color:#b9b8b3;font-size:15px}
+.dl{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.dl .card{display:flex;flex-direction:column;gap:10px}
+.dl .card.me{border-color:var(--or);box-shadow:0 0 0 1px var(--or)}
+.dl .card .btn{justify-content:center;margin-top:auto}
+.dl small{color:var(--mute);font-size:13px}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}
+details p{color:#b9b8b3;margin:10px 0 0}
+code{background:#222227;padding:2px 6px;border-radius:5px;font-size:14px}
+footer{padding:40px 0 60px;color:var(--mute);font-size:14px;border-top:1px solid var(--line)}
+@media (max-width:820px){.hero{grid-template-columns:1fr;padding-top:20px}.grid,.dl{grid-template-columns:1fr}.demo{max-width:420px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><img src="icon-180.png" alt=""><b>Orbe</b><span class="sp"></span><a class="gh" id="ghLink" href="#">Código en GitHub ↗</a></nav>
+
+  <div class="hero">
+    <div>
+      <span class="tag">GRATIS · CÓDIGO ABIERTO</span>
+      <h1>Un asistente que <em>ve</em> lo que tú ves.</h1>
+      <p class="lead">Orbe flota sobre tu pantalla. Ponlo sobre cualquier ventana, pestaña o app, y pregúntale lo que quieras: un error, un correo, una planilla, un formulario.</p>
+      <div class="btns">
+        <a class="btn" id="mainBtn" href="#descargar">⬇ Descargar Orbe</a>
+        <a class="btn alt" href="#como">Cómo funciona</a>
+      </div>
+      <p class="note">Windows · Android · Linux — funciona con Claude o con modelos locales gratis (Ollama).</p>
+    </div>
+    <div class="demo" id="demo" aria-hidden="true">
+      <div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="ln" style="width:60%"></div><div class="ln" style="width:85%"></div>
+        <div class="err">TypeError: Cannot read properties<br>of undefined (reading 'map')<br>&nbsp;&nbsp;at Lista (app.js:42)</div>
+        <div class="ln" style="width:70%"></div><div class="ln" style="width:40%"></div></div>
+      <div class="chat" id="chat"><b>Orbe:</b> El error está en la línea 42: <code style="background:#26262c">items</code> llega vacío. Agrega <code style="background:#26262c">items?.map</code> o un valor por defecto <code style="background:#26262c">= []</code>.</div>
+      <div class="orb" id="orb" style="left:78%;top:70%"></div>
+    </div>
+  </div>
+</div>
+
+<section id="como"><div class="wrap">
+  <h2>Tres pasos. Cero complicaciones.</h2>
+  <p class="sub">Sin copiar y pegar, sin sacar capturas a mano. Orbe mira exactamente la ventana donde lo pones.</p>
+  <div class="grid">
+    <div class="card"><div class="n">01</div><h3>Arrástralo</h3><p>Suelta el orbe sobre cualquier ventana o pestaña. En Android, flota sobre cualquier app.</p></div>
+    <div class="card"><div class="n">02</div><h3>Pregunta</h3><p>"¿Qué significa este error?", "resúmeme esto", "ayúdame a responder este correo".</p></div>
+    <div class="card"><div class="n">03</div><h3>Listo</h3><p>Responde en segundos viendo tu pantalla. También puede leerte la respuesta en voz alta.</p></div>
+  </div>
+</div></section>
+
+<section id="descargar"><div class="wrap">
+  <h2>Descargar</h2>
+  <p class="sub" id="ver">Última versión</p>
+  <div class="dl">
+    <div class="card" data-os="win"><h3>Windows</h3><small>Windows 10 y 11 · instalador .exe</small>
+      <a class="btn" data-asset="Setup" href="#">Descargar para Windows</a>
+      <small>Si aparece "Windows protegió tu PC": <b>Más información → Ejecutar de todas formas</b>.</small></div>
+    <div class="card" data-os="android"><h3>Android</h3><small>Android 8 o superior · archivo .apk</small>
+      <a class="btn" data-asset=".apk" href="#">Descargar para Android</a>
+      <small>Al abrirlo, permite instalar apps de este origen.</small></div>
+    <div class="card" data-os="linux"><h3>Linux</h3><small>AppImage · la mayoría de distribuciones</small>
+      <a class="btn" data-asset=".AppImage" href="#">Descargar para Linux</a>
+      <small>Dale permiso de ejecución y ábrelo.</small></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Preguntas frecuentes</h2>
+  <details><summary>¿Es gratis?</summary><p>Orbe es gratis y de código abierto. Para usarlo con Claude necesitas tu propia API key de Anthropic, que se cobra según lo que uses. En el PC también puedes usar modelos locales gratis con Ollama.</p></details>
+  <details><summary>¿Qué ve Orbe de mi pantalla?</summary><p>Solo envía una captura cuando tú le haces una pregunta con "Ver" activado. Puedes desactivarlo cuando quieras. Orbe no tiene servidores propios: habla directo con el proveedor de IA que elijas.</p></details>
+  <details><summary>¿Dónde consigo la API key?</summary><p>En <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Pégala en Orbe la primera vez que lo abras.</p></details>
+  <details><summary>¿Funciona en iPhone o Mac?</summary><p>Por ahora no. Orbe está disponible para Windows, Android y Linux.</p></details>
+</div></section>
+
+<footer><div class="wrap">Orbe · Licencia MIT · Proyecto independiente, no afiliado a Anthropic. · <a id="ghLink2" href="#">GitHub</a></div></footer>
+
+<script>
+// Detecta el repositorio desde la URL de GitHub Pages: usuario.github.io/orbe → github.com/usuario/orbe
+const host=location.hostname, user=host.endsWith('.github.io')?host.split('.')[0]:'', repo=(location.pathname.split('/')[1]||'orbe');
+const REPO=user?`${user}/${repo}`:'';
+const releases=REPO?`https://github.com/${REPO}/releases/latest`:'#';
+for(const id of ['ghLink','ghLink2'])document.getElementById(id).href=REPO?`https://github.com/${REPO}`:'#';
+document.querySelectorAll('[data-asset]').forEach(a=>a.href=releases);
+// Marca el sistema del visitante
+const ua=navigator.userAgent, os=/Android/i.test(ua)?'android':/Windows/i.test(ua)?'win':/Linux/i.test(ua)?'linux':'';
+if(os){const c=document.querySelector(`[data-os="${os}"]`);c&&c.classList.add('me');const b=document.getElementById('mainBtn');b.textContent='⬇ Descargar para '+({win:'Windows',android:'Android',linux:'Linux'})[os];}
+// Enlaces directos a los archivos de la última versión
+if(REPO)fetch(`https://api.github.com/repos/${REPO}/releases/latest`).then(r=>r.ok?r.json():null).then(j=>{
+  if(!j)return;document.getElementById('ver').textContent='Versión '+j.tag_name.replace(/^v/,'');
+  document.querySelectorAll('[data-asset]').forEach(a=>{const f=j.assets.find(x=>x.name.includes(a.dataset.asset)&&!x.name.endsWith('.blockmap'));if(f)a.href=f.browser_download_url;});
+  if(os){const f=document.querySelector(`[data-os="${os}"] [data-asset]`);if(f)document.getElementById('mainBtn').href=f.href;}
+}).catch(()=>{});
+// Animación de la demo
+const orb=document.getElementById('orb'),chat=document.getElementById('chat');
+function loop(){chat.classList.remove('on');orb.style.left='78%';orb.style.top='70%';
+  setTimeout(()=>{orb.style.left='60%';orb.style.top='30%';},900);
+  setTimeout(()=>{chat.classList.add('on');},2600);
+  setTimeout(loop,7500);}
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches)loop();else chat.classList.add('on');
+</script>
+</body>
+</html>
