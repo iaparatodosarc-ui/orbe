@@ -1,7 +1,7 @@
 {
   "name": "orbe",
   "productName": "Orbe",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Orbe: un asistente de IA flotante que ve la ventana donde lo pones y te ayuda en tiempo real.",
   "main": "src/main.js",
   "author": "Alfredo",
