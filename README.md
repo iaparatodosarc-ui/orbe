@@ -23,6 +23,8 @@ Está hecho para **Claude** (API de Anthropic), con directrices escritas a medid
 
 ## Novedades en la 3.0
 
+- **Nuevo look (3.0.1):** Orbe ahora es una esfera de vidrio negro con un gran ojo naranja incandescente y una **aureola flotante**. Refleja la ciudad, flota suave y parpadea. La aureola muestra lo que hace: brilla fija cuando mira una ventana, gira punteada cuando piensa y late cuando responde.
+
 - **Un orbe con vida:** cada vez que lo tocas reacciona distinto (salta, gira, se ríe, se marea, se enamora…), con sonidos que nunca suenan igual. Todo sintetizado, sin archivos de audio. Se pueden apagar.
 - **Responde por ti, solo si tú lo autorizas:** pídele "respóndele" sobre un chat o correo y te muestra el borrador en una tarjeta. Puedes editarlo. Solo lo escribe en la app si tocas **Autorizar** estando frente al equipo o con el teléfono desbloqueado, y **nunca lo envía**: el botón Enviar lo tocas tú. Viene apagado; se activa en Configuración.
 - **Solo Claude:** usa la herramienta (*tool use*) y la caché de prompt de la API de Claude, así las preguntas siguientes salen más baratas.

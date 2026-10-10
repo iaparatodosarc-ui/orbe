@@ -12,7 +12,7 @@ if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 const IS_WIN = process.platform === 'win32', IS_MAC = process.platform === 'darwin';
-const BUBBLE = { w: 300, h: 140, orb: 84, ox: 18, oy: 28 };
+const BUBBLE = { w: 300, h: 175, orb: 84, ox: 18, oy: 63 };  // el orbe con su aureola arriba
 let bubbleWin, panelWin;
 let target = null;    // { hwnd, wid, title, proc, x, y, w, h, physical:bool }
 let history = [];
