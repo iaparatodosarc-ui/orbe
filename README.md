@@ -19,7 +19,16 @@ Orbe es un pequeño orbe con un ojo que vive encima de todo en tu pantalla.
 - **En el PC:** lo arrastras sobre una ventana (Chrome, Excel, un error en VS Code, un correo…) y queda "mirando" esa ventana. Haces clic, preguntas, y responde viendo exactamente lo que tienes delante.
 - **En Android:** flota sobre cualquier app. Lo tocas, preguntas, y ve tu pantalla para ayudarte.
 
-Funciona con **Claude** (API de Anthropic) o, en el PC, con **modelos locales gratis vía Ollama**.
+Está hecho para **Claude** (API de Anthropic), con directrices escritas a medida para que Claude responda claro y simple, incluso a quien nunca ha usado IA.
+
+## Novedades en la 3.0
+
+- **Un orbe con vida:** cada vez que lo tocas reacciona distinto (salta, gira, se ríe, se marea, se enamora…), con sonidos que nunca suenan igual. Todo sintetizado, sin archivos de audio. Se pueden apagar.
+- **Responde por ti, solo si tú lo autorizas:** pídele "respóndele" sobre un chat o correo y te muestra el borrador en una tarjeta. Puedes editarlo. Solo lo escribe en la app si tocas **Autorizar** estando frente al equipo o con el teléfono desbloqueado, y **nunca lo envía**: el botón Enviar lo tocas tú. Viene apagado; se activa en Configuración.
+- **Solo Claude:** usa la herramienta (*tool use*) y la caché de prompt de la API de Claude, así las preguntas siguientes salen más baratas.
+- Mensajes de error claros (key inválida, sin saldo, Claude ocupado) y botón para probar la API key.
+
+¿Quieres usarlo gratis? Está **Orbe Libre**, la misma app con APIs gratis (NVIDIA, Gemini, Groq u Ollama).
 
 ## Descargar
 
@@ -35,23 +44,23 @@ Funciona con **Claude** (API de Anthropic) o, en el PC, con **modelos locales gr
 ## Cómo se usa
 
 ### PC
-1. Abre Orbe. La primera vez te pide el motor de IA:
-   - **Claude:** pega tu API key de [console.anthropic.com](https://console.anthropic.com/settings/keys).
-   - **Ollama (gratis, local):** instala [Ollama](https://ollama.com) y `ollama pull qwen2.5vl`.
+1. Abre Orbe. La primera vez te pide tu API key de Claude: créala en [console.anthropic.com](https://console.anthropic.com/settings/keys) y pégala. Toca **Probar key**.
 2. **Arrastra el orbe** sobre la ventana que quieras. El anillo se pone naranja.
 3. **Clic en el orbe** → pregunta. O usa **Ctrl + Shift + Espacio** para que mire la ventana activa.
-4. Clic derecho sobre el orbe → configuración o salir.
+4. Clic derecho sobre el orbe → sonidos, configuración o salir.
+5. (Opcional) En ⚙ activa **Orbe puede escribir respuestas por mí**.
 
 ### Android
 1. Instala el APK y ábrelo.
 2. Pega tu API key, da el permiso para "mostrar sobre otras apps" y toca **Iniciar Orbe**.
 3. Acepta que Orbe vea tu pantalla. Abre cualquier app, toca el orbe y pregunta.
+4. (Opcional) Activa **Orbe puede escribir respuestas por mí** y da el permiso de accesibilidad *Orbe · escribir respuestas*. Orbe solo lo usa cuando tocas Autorizar.
 
 ## Privacidad
 
 - Orbe **solo envía una captura cuando tú preguntas** con "Ver" activado. Puedes desactivarlo.
 - Tu API key se guarda en tu dispositivo (cifrada en el PC). Orbe no tiene servidores propios: habla directo con el proveedor de IA que elijas.
-- Con Ollama, nada sale de tu PC.
+- "Responder por ti" está apagado por defecto. Aun activado, cada respuesta necesita tu toque en **Autorizar**, y Orbe nunca la envía.
 
 ## Para desarrolladores
 
@@ -69,8 +78,9 @@ Estructura:
 
 ```
 src/            App de escritorio (Electron)
-  main.js       Ventanas, captura, detección de ventanas, IA (Claude/Ollama)
-  bubble.html   El orbe flotante
+  main.js       Ventanas, captura, detección de ventanas, Claude, responder por ti
+  guidelines.js Directrices de Orbe para Claude (personalidad, reglas, herramienta)
+  bubble.html   El orbe flotante (reacciones y sonidos)
   panel.html    El chat
   winutil.ps1   Ayudante de Windows para saber qué ventana hay bajo el orbe
 android/        App de Android (Kotlin, sin dependencias externas)
@@ -90,7 +100,8 @@ docs/           Página web de descarga (GitHub Pages)
 
 **Orbe** is a floating, always-on-top AI orb. Drag it onto any window (desktop) or tap it over any app (Android), ask a question, and it answers looking at what's on your screen.
 
-- Works with **Claude** (bring your own Anthropic API key) or **local models via Ollama** on desktop.
+- Built for **Claude** (bring your own Anthropic API key). Tap it and it reacts differently every time, with sounds.
+- Can type replies for you **only when you tap Authorize** while present; it never sends them.
 - Screenshots are sent **only when you ask**, straight to the AI provider you choose. No Orbe servers.
 - Downloads: see [Releases](../../releases/latest). Desktop shortcut: **Ctrl + Shift + Space**.
 - Build: `npm install && npm run dist` (desktop), `gradle -p android assembleRelease` (Android).

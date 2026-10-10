@@ -1,8 +1,8 @@
 {
   "name": "orbe",
   "productName": "Orbe",
-  "version": "2.0.0",
-  "description": "Orbe: un asistente de IA flotante que ve la ventana donde lo pones y te ayuda en tiempo real.",
+  "version": "3.0.0",
+  "description": "Orbe: un asistente de IA flotante que ve la ventana donde lo pones y te ayuda en tiempo real. Hecho para la API de Claude.",
   "main": "src/main.js",
   "author": "Alfredo",
   "license": "MIT",
@@ -11,7 +11,7 @@
     "ai",
     "assistant",
     "claude",
-    "ollama",
+    "anthropic",
     "desktop",
     "overlay",
     "electron"

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="access_label">Orbe · escribir respuestas</string>
+    <string name="access_desc">Permite que Orbe escriba en el cuadro de texto de la app que estás usando la respuesta que tú autorizaste. Orbe solo lo hace cuando tocas "Autorizar" en su tarjeta, con el teléfono desbloqueado, y nunca toca Enviar: el mensaje lo envías tú. No lee ni guarda nada más.</string>
+</resources>
