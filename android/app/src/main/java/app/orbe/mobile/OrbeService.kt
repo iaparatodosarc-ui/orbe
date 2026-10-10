@@ -95,6 +95,8 @@ class OrbeService : Service() {
     private lateinit var voiceBtn: Button
 
     private val history = JSONArray()
+    private data class Proposal(val text: String, val created: Long, var decided: String? = null)
+    private val proposals = HashMap<String, Proposal>()
     @Volatile private var busy = false
     @Volatile private var cancel = false
     private var tts: TextToSpeech? = null
@@ -242,14 +244,14 @@ class OrbeService : Service() {
     private fun overlayType(): Int = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
     private fun showOrb() {
-        val size = dp(64)
-        val v = OrbView(this)
+        val size = dp(92) // el orbe se ve de ~64dp; el resto es espacio para que salte y gire
+        val v = OrbView(this).apply { soundsOn = { Prefs.sounds(this@OrbeService) } }
         val p = WindowManager.LayoutParams(size, size, overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT)
         p.gravity = Gravity.TOP or Gravity.START
         val (w, h) = realSize()
-        p.x = w - size - dp(12); p.y = (h * 0.55).toInt()
+        p.x = w - size + dp(10); p.y = (h * 0.55).toInt()
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
         v.setOnTouchListener { _, e ->
             when (e.action) {
@@ -257,15 +259,16 @@ class OrbeService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX; val dy = e.rawY - downY
                     val th = dp(6).toFloat()
-                    if (abs(dx) > th || abs(dy) > th) moved = true
+                    if (!moved && (abs(dx) > th || abs(dy) > th)) { moved = true; if (Prefs.sounds(this)) Sfx.play(this, "pickup") }
                     if (moved) { p.x = startX + dx.toInt(); p.y = startY + dy.toInt(); try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (!moved) togglePanel()
+                    if (!moved) { v.react(); togglePanel() }
                     else { // se pega al borde más cercano
+                        if (Prefs.sounds(this)) Sfx.play(this, "plop")
                         val sw = realSize().first
-                        p.x = if (p.x + size / 2 < sw / 2) dp(4) else sw - size - dp(4)
+                        p.x = if (p.x + size / 2 < sw / 2) -dp(10) else sw - size + dp(10)
                         try { wm.updateViewLayout(v, p) } catch (_: Exception) {}
                     }
                     true
@@ -407,6 +410,7 @@ class OrbeService : Service() {
     private fun newChat() {
         cancel = true
         while (history.length() > 0) history.remove(0)
+        proposals.clear()
         msgList.removeAllViews(); addHint()
     }
 
@@ -454,7 +458,7 @@ class OrbeService : Service() {
         sendBtn.text = "■"; orb?.state = OrbView.State.THINKING
         val go = { shot: Bitmap? ->
             bubble(true, text, shot)
-            val content = JSONArray()
+            val content = pendingToolResults()
             if (shot != null) {
                 content.put(JSONObject().put("type", "image").put("source",
                     JSONObject().put("type", "base64").put("media_type", "image/jpeg").put("data", toBase64(shot))))
@@ -474,21 +478,37 @@ class OrbeService : Service() {
                 }
             }
             history.put(JSONObject().put("role", "user").put("content", content))
-            while (history.length() > 30) history.remove(0)
+            trimHistory()
             val out = bubble(false, "…")
             val model = Prefs.model(this)
+            val allowReply = Prefs.allowReply(this)
             Thread {
                 val sb = StringBuilder()
                 try {
-                    val full = Claude.stream(key, model, history, { d ->
+                    val res = Claude.stream(key, model, history, allowReply, { d ->
                         sb.append(d)
                         val now = clean(sb.toString())
                         main.post { orb?.state = OrbView.State.SPEAKING; out.text = now; msgScroll.fullScroll(View.FOCUS_DOWN) }
                     }, { cancel })
-                    history.put(JSONObject().put("role", "assistant").put("content", if (full.isBlank()) "…" else full))
+                    val full = res.text
+                    val blocks = JSONArray()
+                    if (full.isNotBlank()) blocks.put(JSONObject().put("type", "text").put("text", full))
+                    val cards = ArrayList<Pair<String, JSONObject>>()
+                    for (t in res.tools) {
+                        blocks.put(JSONObject().put("type", "tool_use").put("id", t.id).put("name", t.name).put("input", t.input))
+                        val draft = t.input.optString("texto")
+                        if (t.name == Claude.REPLY_TOOL_NAME && draft.isNotBlank()) {
+                            proposals[t.id] = Proposal(draft, System.currentTimeMillis()); cards.add(t.id to t.input)
+                        }
+                    }
+                    if (blocks.length() == 0) blocks.put(JSONObject().put("type", "text").put("text", "…"))
+                    history.put(JSONObject().put("role", "assistant").put("content", blocks))
                     main.post {
-                        out.text = clean(full.ifBlank { "(detenido)" })
+                        if (full.isBlank() && cards.isNotEmpty()) (out.parent as? View)?.let { msgList.removeView(it) }
+                        else out.text = clean(full.ifBlank { "(detenido)" })
+                        for ((id, input) in cards) draftCard(id, input.optString("texto"), input.optString("para"))
                         if (Prefs.voice(this) && full.isNotBlank()) tts?.speak(clean(full), TextToSpeech.QUEUE_FLUSH, null, "orbe")
+                        if (Prefs.sounds(this) && !cancel) Sfx.play(this, "done")
                     }
                 } catch (e: Exception) {
                     if (history.length() > 0 && history.getJSONObject(history.length() - 1).getString("role") == "user") history.remove(history.length() - 1)
@@ -499,5 +519,113 @@ class OrbeService : Service() {
             }.start()
         }
         if (seeScreen.isChecked) capture { b -> go(b) } else go(null)
+    }
+
+    // ---------------- responder por ti ----------------
+
+    /** Si la última respuesta de Claude usó la herramienta, la API exige devolver el resultado en el siguiente mensaje. */
+    private fun pendingToolResults(): JSONArray {
+        val out = JSONArray()
+        if (history.length() == 0) return out
+        val last = history.getJSONObject(history.length() - 1)
+        val c = last.opt("content")
+        if (last.getString("role") != "assistant" || c !is JSONArray) return out
+        for (i in 0 until c.length()) {
+            val b = c.getJSONObject(i)
+            if (b.optString("type") != "tool_use") continue
+            val st = when (proposals[b.getString("id")]?.decided) {
+                "written" -> "The user authorized it and Orbe typed it into the text box (not sent; the user sends it)."
+                "copied" -> "The user copied the draft to paste it themselves."
+                "discarded" -> "The user discarded the draft."
+                null -> if (proposals.containsKey(b.getString("id"))) "The draft card was shown; the user has not authorized it yet." else "The card could not be shown."
+                else -> "The draft card was shown."
+            }
+            out.put(JSONObject().put("type", "tool_result").put("tool_use_id", b.getString("id")).put("content", st))
+        }
+        return out
+    }
+
+    /** Recorta el historial y se asegura de que empiece con una pregunta del usuario (no con un resultado de herramienta). */
+    private fun trimHistory() {
+        while (history.length() > 30) history.remove(0)
+        while (history.length() > 0) {
+            val m = history.getJSONObject(0)
+            val c = m.opt("content")
+            var isToolResult = false
+            if (c is JSONArray) for (i in 0 until c.length()) if (c.getJSONObject(i).optString("type") == "tool_result") isToolResult = true
+            if (m.getString("role") == "user" && !isToolResult) break
+            history.remove(0)
+        }
+    }
+
+    private fun note(text: String, ok: Boolean) {
+        val tv = bubble(false, text)
+        tv.setTextColor(if (ok) Color.parseColor("#9FF0C2") else Color.parseColor("#FFB39A")); tv.textSize = 13f
+    }
+
+    private fun copy(text: String) =
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Orbe", text))
+
+    /** Tarjeta con el borrador. Nada se escribe hasta que el usuario toca Autorizar. */
+    private fun draftCard(id: String, draft: String, para: String) {
+        hintView?.let { msgList.removeView(it); hintView = null }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; background = rounded(CARD, 14, ORANGE); setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        card.addView(TextView(this).apply {
+            text = if (para.isNotBlank()) "✍ Respuesta para: $para" else "✍ Borrador listo"
+            setTextColor(FG); textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+        })
+        val edit = EditText(this).apply {
+            setText(draft); setTextColor(FG); textSize = 15f; background = rounded(BG, 10, LINE)
+            setPadding(dp(10), dp(8), dp(10), dp(8)); maxLines = 8
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        card.addView(edit, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val buttons = ArrayList<Button>()
+        fun cardBtn(label: String, primary: Boolean, onClick: () -> Unit) = Button(this).apply {
+            text = label; isAllCaps = false; textSize = 13f
+            setTextColor(if (primary) Color.parseColor("#111111") else FG)
+            background = rounded(if (primary) ORANGE else BG, 10, if (primary) 0 else LINE)
+            minHeight = dp(38); minimumHeight = dp(38); setPadding(dp(10), 0, dp(10), 0)
+            setOnClickListener { onClick() }
+        }.also { buttons.add(it); row.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply { rightMargin = dp(6) }) }
+        fun finish() { buttons.forEach { it.isEnabled = false }; edit.isEnabled = false; card.alpha = 0.7f }
+        cardBtn("✅ Autorizar y escribir", true) {
+            val p = proposals[id] ?: return@cardBtn
+            val text = edit.text.toString().ifBlank { p.text }
+            when {
+                !Prefs.allowReply(this) -> note("Activa \"Orbe puede escribir respuestas por mí\" en la app Orbe (paso 4).", false)
+                System.currentTimeMillis() - p.created > 15 * 60 * 1000 -> note("Este borrador es antiguo. Pídele a Orbe uno nuevo.", false)
+                OrbeAccess.instance == null -> {
+                    copy(text); p.decided = "copied"; finish()
+                    note("Para escribir por ti, Orbe necesita el permiso de accesibilidad (paso 4 en la app Orbe). Por ahora la dejé copiada: mantén presionado el cuadro de texto y toca Pegar.", false)
+                }
+                else -> {
+                    hidePanel()
+                    main.postDelayed({
+                        val r = OrbeAccess.instance?.writeInto(text) ?: OrbeAccess.Result.FAILED
+                        when (r) {
+                            OrbeAccess.Result.OK -> { p.decided = "written"; finish(); orb?.react(OrbView.Reaction.HAPPY)
+                                note("Listo, la escribí en el cuadro de texto. Revísala y envíala tú.", true) }
+                            OrbeAccess.Result.NOT_PRESENT -> { showPanel(); note("Solo escribo cuando estás usando el teléfono. Desbloquéalo y vuelve a tocar Autorizar.", false) }
+                            else -> { copy(text); p.decided = "copied"; finish(); showPanel()
+                                note("No encontré dónde escribir. Toca primero el cuadro de texto de la app y vuelve a autorizar, o pégala (ya está copiada).", false) }
+                        }
+                    }, 450)
+                }
+            }
+        }
+        cardBtn("Copiar", false) { proposals[id]?.decided = "copied"; copy(edit.text.toString()); finish(); note("Copiada. Mantén presionado el cuadro de texto y toca Pegar.", true) }
+        cardBtn("✕", false) { proposals[id]?.decided = "discarded"; finish() }
+        card.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        card.addView(TextView(this).apply {
+            text = "Edítala si quieres. Al autorizar, Orbe la escribe en el cuadro de texto de la app; el botón Enviar lo tocas tú."
+            setTextColor(MUTE); textSize = 11f; setPadding(0, dp(6), 0, 0)
+        })
+        msgList.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        msgScroll.post { msgScroll.fullScroll(View.FOCUS_DOWN) }
     }
 }

@@ -15,8 +15,10 @@ contextBridge.exposeInMainWorld('orbe', {
   hide: () => ipcRenderer.send('panel-hide'),
   getCfg: () => ipcRenderer.invoke('get-cfg'),
   setCfg: c => ipcRenderer.invoke('set-cfg', c),
+  testKey: () => ipcRenderer.invoke('test-key'),
   getTarget: () => ipcRenderer.invoke('get-target'),
   recapture: () => ipcRenderer.invoke('recapture'),
+  replyAction: (id, action, text) => ipcRenderer.invoke('reply-action', { id, action, text }),
   openUrl: u => ipcRenderer.send('open-url', u),
   on,
 });

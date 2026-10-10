@@ -53,6 +53,15 @@ textarea:focus{border-color:var(--or)}
 .row{display:flex;gap:8px;justify-content:flex-end;margin-top:auto}
 .btn{background:var(--or);border:none;color:#111;font-weight:700;border-radius:10px;padding:9px 16px;cursor:pointer}
 .btn.g{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+.card{align-self:stretch;background:var(--card);border:1px solid var(--or);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.card .ch{font-size:12px;color:var(--mute)}.card .ch b{color:var(--fg)}
+.card textarea{min-height:70px;max-height:200px;background:#0f0f12}
+.card .cr{display:flex;gap:6px;flex-wrap:wrap}.card .btn{padding:7px 11px;font-size:13px}
+.card .cn{font-size:11px;color:var(--mute);line-height:1.4}
+.card.done{border-color:var(--line);opacity:.75}
+.ok{align-self:stretch;background:#10241a;border:1px solid #1d5a3a;color:#9ff0c2;padding:9px 12px;border-radius:10px;font-size:13px}
+#set input[type=range]{width:100%;accent-color:var(--or)}
+.sep{border-top:1px solid var(--line);margin:4px 0}
 #zoom{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;place-items:center;z-index:9;cursor:zoom-out}
 #zoom img{max-width:94%;max-height:94%;border-radius:8px}
 </style></head>
@@ -87,21 +96,17 @@ textarea:focus{border-color:var(--or)}
   <div id="set">
     <h3 data-i="setTitle"></h3>
     <div class="note" id="welcome" data-ih="welcome" style="display:none;font-size:13px;color:var(--fg)"></div>
-    <div><label data-i="provider"></label>
-      <select id="sProv" style="width:100%;background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px;margin-top:4px">
-        <option value="anthropic">Claude (Anthropic API)</option>
-        <option value="ollama">Ollama (local, gratis)</option>
-      </select></div>
-    <div id="boxA">
-      <div><label data-i="key"></label><input type="password" id="sKey" placeholder="sk-ant-...">
-        <div class="note"><span data-i="keyNote1"></span> <a id="lnk">console.anthropic.com</a> <span data-i="keyNote2"></span></div></div>
-      <div style="margin-top:10px"><label data-i="model"></label><input type="text" id="sModel" placeholder="claude-opus-5-5"></div>
-    </div>
-    <div id="boxO" style="display:none">
-      <div><label>URL</label><input type="text" id="sOUrl" placeholder="http://localhost:11434"></div>
-      <div style="margin-top:10px"><label data-i="model"></label><input type="text" id="sOModel" placeholder="qwen2.5vl"></div>
-      <div class="note" data-ih="ollamaNote"></div>
-    </div>
+    <div><label data-i="key"></label><input type="password" id="sKey" placeholder="sk-ant-...">
+      <div class="note"><span data-i="keyNote1"></span> <a id="lnk">console.anthropic.com</a> <span data-i="keyNote2"></span> <a id="sTest" data-i="test"></a> <span id="sTestR"></span></div></div>
+    <div><label data-i="model"></label><input type="text" id="sModel" list="mlist" placeholder="claude-opus-5-5"><datalist id="mlist"></datalist>
+      <div class="note" id="mnote"></div></div>
+    <div class="sep"></div>
+    <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sSounds"> <span data-i="sounds"></span></label>
+    <div><label data-i="volume"></label><input type="range" id="sVol" min="0" max="1" step="0.05"></div>
+    <div class="sep"></div>
+    <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sReply"> <span data-i="reply"></span></label>
+    <div class="note" data-ih="replyNote"></div>
+    <div class="sep"></div>
     <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sVoice"> <span data-i="voice"></span></label>
     <div class="note" data-ih="setNote"></div>
     <div class="row"><button class="btn g" id="sCancel" data-i="close"></button><button class="btn" id="sSave" data-i="save"></button></div>
@@ -114,21 +119,41 @@ const ES=(navigator.language||'es').toLowerCase().startsWith('es');
 const T=ES?{
  live:'en vivo',see:'Ver',ph:'Pregúntale a Orbe…  (Enter para enviar)',c1:'¿Qué ves aquí?',c2:'Resúmelo',c3:'Explícame este error',c4:'Ayúdame a responder',c5:'¿Qué hago ahora?',
  hint:'<b>Arrastra el orbe</b> sobre cualquier ventana o pestaña<br>y pregúntame lo que quieras sobre lo que ves.<br><br>Atajo: <b>Ctrl + Shift + Espacio</b> → mira la ventana activa.<br>Dictado por voz: <b>Win + H</b> en el cuadro de texto.',
- setTitle:'Configuración',provider:'Motor de IA',key:'API key de Anthropic',keyNote1:'Créala en',keyNote2:'→ API Keys. Se guarda cifrada en este equipo. El uso de la API se cobra según consumo.',model:'Modelo',
- ollamaNote:'Instala <b>Ollama</b> (ollama.com) y un modelo con visión, por ejemplo: <code>ollama pull qwen2.5vl</code>. Todo queda en tu PC.',
+ setTitle:'Configuración',key:'API key de Claude (Anthropic)',keyNote1:'Créala en',keyNote2:'→ API Keys. Se guarda cifrada en este equipo. El uso de la API se cobra según consumo.',model:'Modelo de Claude',test:'Probar key',testing:'Probando…',testok:'✓ Funciona',
+ mnote:'Opus responde mejor; Haiku es más rápido y barato.',sounds:'Sonidos del orbe',volume:'Volumen',reply:'Orbe puede escribir respuestas por mí',
+ replyNote:'Cuando le pidas responder un mensaje, Orbe te mostrará el borrador. <b>Solo lo escribe si tú tocas "Autorizar"</b>, estando frente al equipo, en la ventana donde está el orbe. Nunca lo envía: el botón Enviar lo tocas tú.',
+ auth:'✅ Autorizar y escribir',copyD:'Copiar',discard:'Descartar',to:'Respuesta para',draft:'Borrador listo',
+ cardNote:'Revisa y edita si quieres. Al autorizar, Orbe la escribe en el cuadro de texto activo de la ventana; tú decides si la envías.',
+ cardNoTarget:'Para que Orbe la escriba, arrastra el orbe sobre la ventana del mensaje. Mientras, puedes copiarla.',
+ written:'Listo, la escribí en la ventana. Revísala y envíala tú.',copiedD:'Copiada. Pégala con Ctrl+V donde quieras.',discarded:'Borrador descartado.',
+ replyoff:'Activa "Orbe puede escribir respuestas por mí" en ⚙ para usar esto.',expired:'Este borrador es antiguo. Pídele a Orbe uno nuevo.',notpresent:'Solo escribo cuando estás frente al equipo. Vuelve a tocar Autorizar.',
+ notarget:'Arrastra el orbe sobre la ventana del mensaje primero.',moved:'La ventana bajo el orbe cambió. Vuelve a poner el orbe sobre el mensaje y autoriza otra vez.',
+ typefail:'No pude escribir en esa ventana; dejé la respuesta copiada. Pégala con Ctrl+V.',gone:'Ese borrador ya no existe.',
+ badkey:'La API key no es válida. Revísala en ⚙.',forbidden:'Tu API key no tiene permiso para este modelo.',ratelimit:'Muchas preguntas seguidas. Espera unos segundos.',
+ nocredit:'Tu cuenta de Anthropic no tiene saldo. Recárgala en console.anthropic.com → Billing.',badmodel:'Ese modelo no existe. Elige otro en ⚙.',overloaded:'Claude está muy ocupado ahora. Intenta de nuevo en un momento.',net:'Sin conexión a internet.',
  voice:'Leer respuestas en voz alta',setNote:'Atajo global: <b>Ctrl + Shift + Espacio</b>. Clic derecho sobre el orbe para más opciones o para salir.',close:'Cerrar',save:'Guardar',
- welcome:'<b>¡Bienvenido a Orbe!</b> 3 pasos:<br>1. Elige el motor de IA y pega tu API key.<br>2. Arrastra el orbe sobre cualquier ventana.<br>3. Haz clic en el orbe y pregunta.',
+ welcome:'<b>¡Bienvenido a Orbe!</b> 3 pasos:<br>1. Pega tu API key de Claude.<br>2. Arrastra el orbe sobre cualquier ventana.<br>3. Haz clic en el orbe y pregunta.',
  saved:'Listo, configuración guardada. Arrastra el orbe sobre una ventana y pregúntame algo.',newc:'Conversación nueva. ¿En qué te ayudo?',full:'Pantalla completa',
- nokey:'Falta configurar el motor de IA. Ábrelo en ⚙.',busy:'Espera a que termine la respuesta anterior.',stopped:'Detenido.',copy:'Copiar',copied:'¡Copiado!'
+ nokey:'Falta tu API key de Claude. Ábrela en ⚙.',busy:'Espera a que termine la respuesta anterior.',stopped:'Detenido.',copy:'Copiar',copied:'¡Copiado!'
 }:{
  live:'live',see:'See',ph:'Ask Orbe…  (Enter to send)',c1:'What do you see?',c2:'Summarize it',c3:'Explain this error',c4:'Help me reply',c5:'What should I do next?',
  hint:'<b>Drag the orb</b> onto any window or tab<br>and ask me anything about what you see.<br><br>Shortcut: <b>Ctrl + Shift + Space</b> → look at the active window.',
- setTitle:'Settings',provider:'AI engine',key:'Anthropic API key',keyNote1:'Create it at',keyNote2:'→ API Keys. Stored encrypted on this device. API usage is billed per use.',model:'Model',
- ollamaNote:'Install <b>Ollama</b> (ollama.com) and a vision model, e.g. <code>ollama pull qwen2.5vl</code>. Everything stays on your PC.',
+ setTitle:'Settings',key:'Claude API key (Anthropic)',keyNote1:'Create it at',keyNote2:'→ API Keys. Stored encrypted on this device. API usage is billed per use.',model:'Claude model',test:'Test key',testing:'Testing…',testok:'✓ Works',
+ mnote:'Opus answers best; Haiku is faster and cheaper.',sounds:'Orb sounds',volume:'Volume',reply:'Orbe can write replies for me',
+ replyNote:'When you ask Orbe to reply to a message, it shows you a draft. <b>It only types it if you tap "Authorize"</b> while at the computer, in the window under the orb. It never sends it: you press Send.',
+ auth:'✅ Authorize and type',copyD:'Copy',discard:'Discard',to:'Reply to',draft:'Draft ready',
+ cardNote:'Review and edit if you like. When authorized, Orbe types it into the active text box of that window; you decide whether to send it.',
+ cardNoTarget:'To let Orbe type it, drag the orb onto the message window. Meanwhile you can copy it.',
+ written:'Done, I typed it in the window. Check it and send it yourself.',copiedD:'Copied. Paste it with Ctrl+V anywhere.',discarded:'Draft discarded.',
+ replyoff:'Enable "Orbe can write replies for me" in ⚙ to use this.',expired:'This draft is old. Ask Orbe for a new one.',notpresent:'I only type while you are at the computer. Tap Authorize again.',
+ notarget:'Drag the orb onto the message window first.',moved:'The window under the orb changed. Put the orb back on the message and authorize again.',
+ typefail:'I could not type in that window; the reply is copied. Paste it with Ctrl+V.',gone:'That draft no longer exists.',
+ badkey:'The API key is not valid. Check it in ⚙.',forbidden:'Your API key cannot use this model.',ratelimit:'Too many questions in a row. Wait a few seconds.',
+ nocredit:'Your Anthropic account has no credit. Top up at console.anthropic.com → Billing.',badmodel:'That model does not exist. Pick another in ⚙.',overloaded:'Claude is very busy right now. Try again in a moment.',net:'No internet connection.',
  voice:'Read answers aloud',setNote:'Global shortcut: <b>Ctrl + Shift + Space</b>. Right-click the orb for more options or to quit.',close:'Close',save:'Save',
- welcome:'<b>Welcome to Orbe!</b> 3 steps:<br>1. Pick the AI engine and paste your API key.<br>2. Drag the orb onto any window.<br>3. Click the orb and ask.',
+ welcome:'<b>Welcome to Orbe!</b> 3 steps:<br>1. Paste your Claude API key.<br>2. Drag the orb onto any window.<br>3. Click the orb and ask.',
  saved:'Settings saved. Drag the orb onto a window and ask me something.',newc:'New conversation. How can I help?',full:'Full screen',
- nokey:'Set up the AI engine first (⚙).',busy:'Wait for the current answer to finish.',stopped:'Stopped.',copy:'Copy',copied:'Copied!'
+ nokey:'Add your Claude API key first (⚙).',busy:'Wait for the current answer to finish.',stopped:'Stopped.',copy:'Copy',copied:'Copied!'
 };
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T[e.dataset.i]);
 document.querySelectorAll('[data-ih]').forEach(e=>e.innerHTML=T[e.dataset.ih]);
@@ -166,7 +191,7 @@ async function ask(text){
   const r=await orbe.ask(text,withScreen);
   setBusy(false);cur.classList.remove('cursor');
   if(r.error){if(!curText)cur.remove();add('err',esc(ERR(r.error)));if(r.error==='nokey')openSet();if(pendingShot&&!pendingShot.src)pendingShot.remove();}
-  else{cur.innerHTML=md(r.text||curText);speak(r.text||curText);}
+  else{if(r.text||curText){cur.innerHTML=md(r.text||curText);speak(r.text||curText);}else cur.remove();(r.cards||[]).forEach(card);}
   cur=null;scroll();
 }
 orbe.on('delta',t=>{if(!cur)return;curText+=t;cur.innerHTML=md(curText);scroll();});
@@ -197,17 +222,33 @@ function speak(t){if(!voice||!t)return;speechSynthesis.cancel();const clean=t.re
 function setVoice(v){voice=v;$('bVoice').textContent=v?'🔊':'🔇';if(!v)speechSynthesis.cancel();}
 $('bVoice').onclick=async()=>{setVoice(!voice);await orbe.setCfg({voice});};
 
+// borradores de respuesta (responder por ti)
+function card(c){
+  const d=add('card','');
+  d.innerHTML=`<div class="ch">✍ <b>${c.para?T.to+': '+esc(c.para):T.draft}</b></div><textarea></textarea>
+    <div class="cr"><button class="btn" data-a="write">${T.auth}</button><button class="btn g" data-a="copy">${T.copyD}</button><button class="btn g" data-a="discard">${T.discard}</button></div>
+    <div class="cn">${c.canWrite?T.cardNote:T.cardNoTarget}</div>`;
+  const ta=d.querySelector('textarea');ta.value=c.text;
+  d.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
+    const a=b.dataset.a;d.querySelectorAll('button').forEach(x=>x.disabled=true);
+    const r=await orbe.replyAction(c.id,a,ta.value);
+    if(r.ok){d.classList.add('done');ta.disabled=true;add('ok',esc(a==='write'?T.written:a==='copy'?T.copiedD:T.discarded));}
+    else{add('err',esc(ERR(r.error)));if(r.error==='typefail'){d.classList.add('done');ta.disabled=true;}else d.querySelectorAll('button').forEach(x=>x.disabled=false);if(r.error==='replyoff')openSet();}
+  });
+}
+
 // configuración
-function provUI(){const o=$('sProv').value==='ollama';$('boxA').style.display=o?'none':'';$('boxO').style.display=o?'':'none';}
-$('sProv').onchange=provUI;
-async function openSet(welcome){const c=await orbe.getCfg();$('sProv').value=c.provider||'anthropic';$('sKey').value=c.apiKey||'';$('sModel').value=c.model||'';
-  $('sOUrl').value=c.ollamaUrl||'';$('sOModel').value=c.ollamaModel||'';$('sVoice').checked=!!c.voice;$('welcome').style.display=(welcome||!c.onboarded)?'':'none';
-  provUI();$('set').classList.add('on');setTimeout(()=>$('sKey').focus(),50);}
+async function openSet(welcome){const c=await orbe.getCfg();$('sKey').value=c.apiKey||'';$('sModel').value=c.model||'';
+  $('mlist').innerHTML=(c.models||[]).map(m=>`<option value="${m.id}">${esc(m.label)}</option>`).join('');$('mnote').textContent=T.mnote;
+  $('sVoice').checked=!!c.voice;$('sSounds').checked=c.sounds!==false;$('sVol').value=c.volume??.6;$('sReply').checked=!!c.allowReply;$('sTestR').textContent='';
+  $('welcome').style.display=(welcome||!c.onboarded)?'':'none';
+  $('set').classList.add('on');setTimeout(()=>$('sKey').focus(),50);}
 $('bSet').onclick=()=>openSet(false);$('sCancel').onclick=()=>$('set').classList.remove('on');
 $('lnk').onclick=()=>orbe.openUrl('https://console.anthropic.com/settings/keys');
-$('sSave').onclick=async()=>{await orbe.setCfg({provider:$('sProv').value,apiKey:$('sKey').value,model:$('sModel').value,ollamaUrl:$('sOUrl').value,ollamaModel:$('sOModel').value,voice:$('sVoice').checked,onboarded:true});
-  setVoice($('sVoice').checked);$('set').classList.remove('on');$('prov').textContent=$('sProv').value==='ollama'?'Ollama':'Claude';add('a',`<p>${T.saved}</p>`);};
-orbe.getCfg().then(c=>{$('prov').textContent=c.provider==='ollama'?'Ollama':'Claude';});
+function cfgFromForm(){return{apiKey:$('sKey').value,model:$('sModel').value,voice:$('sVoice').checked,sounds:$('sSounds').checked,volume:+$('sVol').value,allowReply:$('sReply').checked,onboarded:true};}
+$('sTest').onclick=async()=>{$('sTestR').textContent=T.testing;await orbe.setCfg(cfgFromForm());const r=await orbe.testKey();$('sTestR').textContent=r.ok?T.testok:'⚠ '+ERR(r.error);};
+$('sSave').onclick=async()=>{await orbe.setCfg(cfgFromForm());
+  setVoice($('sVoice').checked);$('set').classList.remove('on');add('a',`<p>${T.saved}</p>`);};
 orbe.getCfg().then(c=>setVoice(!!c.voice));
 </script>
 </body></html>

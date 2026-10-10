@@ -16,6 +16,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -37,6 +38,8 @@ class MainActivity : Activity() {
     private lateinit var modelInput: EditText
     private lateinit var overlayBtn: Button
     private lateinit var startBtn: Button
+    private lateinit var accessBtn: Button
+    private lateinit var replyBox: CheckBox
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
     private fun rounded(color: Int, r: Int, stroke: Int = 0) = GradientDrawable().apply {
@@ -50,21 +53,26 @@ class MainActivity : Activity() {
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(28), dp(22), dp(28)) }
         val scroll = ScrollView(this).apply { setBackgroundColor(BG); addView(col) }
 
-        col.addView(OrbView(this), LinearLayout.LayoutParams(dp(84), dp(84)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(12) })
+        val orbDemo = OrbView(this).apply { soundsOn = { Prefs.sounds(this@MainActivity) } }
+        orbDemo.setOnClickListener { orbDemo.react() }
+        col.addView(orbDemo, LinearLayout.LayoutParams(dp(124), dp(124)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(4) })
         col.addView(TextView(this).apply { text = "Orbe"; textSize = 34f; setTextColor(FG); setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER })
         col.addView(TextView(this).apply {
-            text = "Tu asistente de IA flotante. Aparece encima de cualquier app y ve lo que tienes en pantalla para ayudarte en tiempo real."
+            text = "Tu asistente de IA flotante, hecho para Claude. Aparece encima de cualquier app y ve lo que tienes en pantalla para ayudarte en tiempo real. Tócalo: cada vez reacciona distinto."
             textSize = 14f; setTextColor(MUTE); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, dp(22))
         })
 
         // Paso 1
-        col.addView(step("1", "Tu API key de Anthropic"))
+        col.addView(step("1", "Tu API key de Claude (Anthropic)"))
         keyInput = field("sk-ant-...", true).also { col.addView(it, fieldLp()) }
         if (Prefs.apiKey(this).isNotBlank()) keyInput.hint = "Guardada •••• " + Prefs.apiKey(this).takeLast(4)
         col.addView(link("Crear una API key en console.anthropic.com →") {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://console.anthropic.com/settings/keys")))
         })
-        col.addView(TextView(this).apply { text = "Modelo"; setTextColor(MUTE); textSize = 12f; setPadding(0, dp(10), 0, 0) })
+        col.addView(TextView(this).apply {
+            text = "Modelo de Claude: " + Prefs.MODELS.joinToString("  ·  ") { "${it.first} (${it.second.substringAfter("· ")})" }
+            setTextColor(MUTE); textSize = 12f; setPadding(0, dp(10), 0, 0)
+        })
         modelInput = field(Prefs.DEFAULT_MODEL, false).also { it.setText(Prefs.model(this)); col.addView(it, fieldLp()) }
         col.addView(button("Guardar", false) { save() }, btnLp())
 
@@ -87,8 +95,30 @@ class MainActivity : Activity() {
             startService(Intent(this, OrbeService::class.java).setAction(OrbeService.ACTION_STOP))
             refresh()
         }, btnLp())
+
+        // Paso 4 (opcional)
+        col.addView(step("4", "Opciones"))
+        col.addView(CheckBox(this).apply {
+            text = "Sonidos del orbe"; setTextColor(FG); textSize = 14f; isChecked = Prefs.sounds(this@MainActivity)
+            buttonTintList = android.content.res.ColorStateList.valueOf(ORANGE)
+            setOnCheckedChangeListener { _, v -> Prefs.of(this@MainActivity).edit().putBoolean("sounds", v).apply() }
+        })
+        replyBox = CheckBox(this).apply {
+            text = "Orbe puede escribir respuestas por mí"; setTextColor(FG); textSize = 14f; isChecked = Prefs.allowReply(this@MainActivity)
+            buttonTintList = android.content.res.ColorStateList.valueOf(ORANGE)
+            setOnCheckedChangeListener { _, v -> Prefs.of(this@MainActivity).edit().putBoolean("allowReply", v).apply(); refresh() }
+        }
+        col.addView(replyBox)
         col.addView(TextView(this).apply {
-            text = "Orbe es código abierto (MIT). El uso de la API de Anthropic se cobra según tu consumo, aparte de tu plan de Claude."
+            text = "Cuando le pidas responder un mensaje, Orbe te muestra el borrador. Solo lo escribe en la app si tú tocas \"Autorizar\" con el teléfono desbloqueado, y nunca toca Enviar: eso lo haces tú. Para escribir necesita el permiso de accesibilidad (Ajustes → Accesibilidad → Apps instaladas → Orbe · escribir respuestas)."
+            setTextColor(MUTE); textSize = 12f; setPadding(0, dp(4), 0, 0)
+        })
+        accessBtn = button("Dar permiso para escribir", false) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        col.addView(accessBtn, btnLp())
+        col.addView(TextView(this).apply {
+            text = "Orbe es código abierto (MIT). El uso de la API de Claude se cobra según tu consumo, aparte de tu plan de Claude."
             setTextColor(MUTE); textSize = 11f; gravity = Gravity.CENTER; setPadding(0, dp(24), 0, 0)
         })
         setContentView(scroll)
@@ -105,6 +135,8 @@ class MainActivity : Activity() {
         overlayBtn.text = if (ok) "✓ Permiso concedido" else "Dar permiso"
         overlayBtn.isEnabled = !ok
         startBtn.text = if (OrbeService.running) "✓ Orbe está activo (abrir chat)" else "▶  Iniciar Orbe"
+        accessBtn.visibility = if (replyBox.isChecked) android.view.View.VISIBLE else android.view.View.GONE
+        accessBtn.text = if (OrbeAccess.enabled) "✓ Permiso para escribir activo" else "Dar permiso para escribir"
     }
 
     private fun save(): Boolean {
