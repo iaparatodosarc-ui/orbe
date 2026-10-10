@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Orbe solo usa esto para escribir una respuesta cuando tú tocas "Autorizar". No lee eventos ni actúa solo. -->
-<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/access_desc"
-    android:accessibilityEventTypes="typeWindowStateChanged"
-    android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
-    android:canRetrieveWindowContent="true"
-    android:notificationTimeout="500" />
