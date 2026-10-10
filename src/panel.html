@@ -59,6 +59,7 @@ textarea:focus{border-color:var(--or)}
 .card .cr{display:flex;gap:6px;flex-wrap:wrap}.card .btn{padding:7px 11px;font-size:13px}
 .card .cn{font-size:11px;color:var(--mute);line-height:1.4}
 .card.done{border-color:var(--line);opacity:.75}
+.card img.draw{width:100%;max-width:320px;align-self:center;border-radius:10px;background:#fff;border:1px solid var(--line);cursor:zoom-in}
 .ok{align-self:stretch;background:#10241a;border:1px solid #1d5a3a;color:#9ff0c2;padding:9px 12px;border-radius:10px;font-size:13px}
 #set input[type=range]{width:100%;accent-color:var(--or)}
 .sep{border-top:1px solid var(--line);margin:4px 0}
@@ -78,6 +79,7 @@ textarea:focus{border-color:var(--or)}
   <div id="tbar">
     <span id="tname">👁 <b>Pantalla completa</b></span>
     <label class="tog" title="Enviar una captura de la ventana con cada mensaje"><input type="checkbox" id="withScreen" checked><span data-i="see">Ver</span></label>
+    <label class="tog" id="readWrap" style="display:none" title="Dejar que Orbe lea lo que hay dentro del archivo bajo el orbe"><input type="checkbox" id="readFile"><span data-i="readc">Leer contenido</span></label>
     <button class="sb" id="bShot" title="Tomar y mostrar la captura que verá Claude">📷</button>
   </div>
   <div id="msgs"><div class="hint" id="hint" data-ih="hint"></div></div>
@@ -87,6 +89,7 @@ textarea:focus{border-color:var(--or)}
     <button class="chip" data-i="c3"></button>
     <button class="chip" data-i="c4"></button>
     <button class="chip" data-i="c5"></button>
+    <button class="chip" data-i="c6"></button>
   </div>
   <footer>
     <textarea id="inp" rows="1" data-ip="ph"></textarea>
@@ -117,7 +120,7 @@ textarea:focus{border-color:var(--or)}
 const $=id=>document.getElementById(id);
 const ES=(navigator.language||'es').toLowerCase().startsWith('es');
 const T=ES?{
- live:'en vivo',see:'Ver',ph:'Pregúntale a Orbe…  (Enter para enviar)',c1:'¿Qué ves aquí?',c2:'Resúmelo',c3:'Explícame este error',c4:'Ayúdame a responder',c5:'¿Qué hago ahora?',
+ live:'en vivo',see:'Ver',readc:'Leer contenido',folder:'Carpeta',file:'Archivo',icon:'Ícono',fc1:'¿Qué hay aquí?',fc2:'¿Qué es lo más pesado?',fc3:'Ayúdame a ordenarla',ff1:'¿Qué es este archivo?',ff2:'Resúmelo',draw:'Dibujo',pasteD:'🎨 Pegar en la ventana',saveD:'Guardar',pasted:'¡Listo! Lo pegué en la ventana.',savedD:'Dibujo guardado.',nopaste:'No pude pegarlo ahí; lo dejé copiado. Pégalo con Ctrl+V.',drawNote:'Abre Paint (u otra app), pon el orbe encima y toca Pegar.',c6:'Dibújame algo',ph:'Pregúntale a Orbe…  (Enter para enviar)',c1:'¿Qué ves aquí?',c2:'Resúmelo',c3:'Explícame este error',c4:'Ayúdame a responder',c5:'¿Qué hago ahora?',
  hint:'<b>Arrastra el orbe</b> sobre cualquier ventana o pestaña<br>y pregúntame lo que quieras sobre lo que ves.<br><br>Atajo: <b>Ctrl + Shift + Espacio</b> → mira la ventana activa.<br>Dictado por voz: <b>Win + H</b> en el cuadro de texto.',
  setTitle:'Configuración',key:'API key de Claude (Anthropic)',keyNote1:'Créala en',keyNote2:'→ API Keys. Se guarda cifrada en este equipo. El uso de la API se cobra según consumo.',model:'Modelo de Claude',test:'Probar key',testing:'Probando…',testok:'✓ Funciona',
  mnote:'Opus responde mejor; Haiku es más rápido y barato.',sounds:'Sonidos del orbe',volume:'Volumen',reply:'Orbe puede escribir respuestas por mí',
@@ -136,7 +139,7 @@ const T=ES?{
  saved:'Listo, configuración guardada. Arrastra el orbe sobre una ventana y pregúntame algo.',newc:'Conversación nueva. ¿En qué te ayudo?',full:'Pantalla completa',
  nokey:'Falta tu API key de Claude. Ábrela en ⚙.',busy:'Espera a que termine la respuesta anterior.',stopped:'Detenido.',copy:'Copiar',copied:'¡Copiado!'
 }:{
- live:'live',see:'See',ph:'Ask Orbe…  (Enter to send)',c1:'What do you see?',c2:'Summarize it',c3:'Explain this error',c4:'Help me reply',c5:'What should I do next?',
+ live:'live',see:'See',readc:'Read content',folder:'Folder',file:'File',icon:'Icon',fc1:'What is in here?',fc2:'What is the biggest?',fc3:'Help me organize it',ff1:'What is this file?',ff2:'Summarize it',draw:'Drawing',pasteD:'🎨 Paste in the window',saveD:'Save',pasted:'Done! I pasted it in the window.',savedD:'Drawing saved.',nopaste:'I could not paste it there; it is copied. Paste with Ctrl+V.',drawNote:'Open Paint (or another app), put the orb over it and tap Paste.',c6:'Draw me something',ph:'Ask Orbe…  (Enter to send)',c1:'What do you see?',c2:'Summarize it',c3:'Explain this error',c4:'Help me reply',c5:'What should I do next?',
  hint:'<b>Drag the orb</b> onto any window or tab<br>and ask me anything about what you see.<br><br>Shortcut: <b>Ctrl + Shift + Space</b> → look at the active window.',
  setTitle:'Settings',key:'Claude API key (Anthropic)',keyNote1:'Create it at',keyNote2:'→ API Keys. Stored encrypted on this device. API usage is billed per use.',model:'Claude model',test:'Test key',testing:'Testing…',testok:'✓ Works',
  mnote:'Opus answers best; Haiku is faster and cheaper.',sounds:'Orb sounds',volume:'Volume',reply:'Orbe can write replies for me',
@@ -188,10 +191,10 @@ async function ask(text){
   u.innerHTML=(withScreen?'<img alt="captura" style="display:none">':'')+esc(text).replace(/\n/g,'<br>');
   pendingShot=u.querySelector('img');
   cur=add('a cursor','');curText='';setBusy(true);
-  const r=await orbe.ask(text,withScreen);
+  const r=await orbe.ask(text,withScreen,$('readFile').checked);
   setBusy(false);cur.classList.remove('cursor');
   if(r.error){if(!curText)cur.remove();add('err',esc(ERR(r.error)));if(r.error==='nokey')openSet();if(pendingShot&&!pendingShot.src)pendingShot.remove();}
-  else{if(r.text||curText){cur.innerHTML=md(r.text||curText);speak(r.text||curText);}else cur.remove();(r.cards||[]).forEach(card);}
+  else{if(r.text||curText){cur.innerHTML=md(r.text||curText);speak(r.text||curText);}else cur.remove();(r.cards||[]).forEach(c=>c.kind==='draw'?drawCard(c):card(c));}
   cur=null;scroll();
 }
 orbe.on('delta',t=>{if(!cur)return;curText+=t;cur.innerHTML=md(curText);scroll();});
@@ -199,7 +202,17 @@ orbe.on('shot',url=>{if(pendingShot){if(url){pendingShot.src=url;pendingShot.sty
 orbe.on('target',t=>showTarget(t));
 orbe.on('focus-input',()=>setTimeout(()=>inp.focus(),50));
 orbe.on('open-settings',o=>openSet(o&&o.welcome));
-function showTarget(t){$('tname').innerHTML=t?`👁 <b>${esc(t.title)}</b>`:`👁 <b>${T.full}</b>`;$('tname').title=t?`${t.title} — ${t.proc||''}`:'';}
+function showTarget(t){
+  const it=t&&t.item;
+  if(it){const ic=it.kind==='folder'?'📁':it.kind==='file'?'📄':'🔹';const lab=it.kind==='folder'?T.folder:it.kind==='file'?T.file:T.icon;
+    $('tname').innerHTML=`${ic} <b>${esc(it.name)}</b>`;$('tname').title=`${lab}: ${it.path||it.name}`;}
+  else{$('tname').innerHTML=t?`👁 <b>${esc(t.title)}</b>`:`👁 <b>${T.full}</b>`;$('tname').title=t?`${t.title} — ${t.proc||''}`:'';}
+  $('readWrap').style.display=it&&it.kind==='file'?'':'none';if(!(it&&it.kind==='file'))$('readFile').checked=false;
+  // sugerencias según lo que mira el orbe
+  const chips=[...document.querySelectorAll('.chip')];
+  const set=it&&it.kind==='folder'?['fc1','fc2','fc3','c6']:it&&it.kind==='file'?['ff1','ff2','c3','c6']:['c1','c2','c3','c4','c5','c6'];
+  chips.forEach((c,i)=>{if(set[i]){c.textContent=T[set[i]];c.style.display='';}else c.style.display='none';});
+}
 orbe.getTarget().then(showTarget);
 
 send.onclick=()=>busy?orbe.stop():ask(inp.value);
@@ -234,6 +247,24 @@ function card(c){
     const r=await orbe.replyAction(c.id,a,ta.value);
     if(r.ok){d.classList.add('done');ta.disabled=true;add('ok',esc(a==='write'?T.written:a==='copy'?T.copiedD:T.discarded));}
     else{add('err',esc(ERR(r.error)));if(r.error==='typefail'){d.classList.add('done');ta.disabled=true;}else d.querySelectorAll('button').forEach(x=>x.disabled=false);if(r.error==='replyoff')openSet();}
+  });
+}
+
+// dibujos: el SVG se muestra seguro como imagen y se convierte a PNG para pegar/guardar
+function svgUrl(svg){return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);}
+function toPng(svg){return new Promise((ok,bad)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=1024;c.height=1024;
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,1024,1024);x.drawImage(im,0,0,1024,1024);ok(c.toDataURL('image/png'));};im.onerror=bad;im.src=svgUrl(svg);});}
+function drawCard(c){
+  const d=add('card','');
+  d.innerHTML=`<div class="ch">🎨 <b>${esc(c.title||T.draw)}</b></div><img class="draw" alt="">
+    <div class="cr"><button class="btn" data-a="paste">${T.pasteD}</button><button class="btn g" data-a="copy">${T.copyD}</button><button class="btn g" data-a="save">${T.saveD}</button></div>
+    <div class="cn">${T.drawNote}</div>`;
+  d.querySelector('img').src=svgUrl(c.svg);
+  d.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
+    const a=b.dataset.a;let png;try{png=await toPng(c.svg);}catch{add('err',esc(ERR('bad')));return;}
+    const r=await orbe.drawAction(c.id,a,png);
+    if(r.ok)add('ok',esc(a==='paste'?T.pasted:a==='save'?T.savedD:T.copiedD));
+    else if(r.error!=='canceled')add('err',esc(r.error==='nopaste'||r.error==='typefail'?T.nopaste:ERR(r.error)));
   });
 }
 

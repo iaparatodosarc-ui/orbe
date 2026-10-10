@@ -21,6 +21,11 @@ Orbe es un pequeño orbe con un ojo que vive encima de todo en tu pantalla.
 
 Está hecho para **Claude** (API de Anthropic), con directrices escritas a medida para que Claude responda claro y simple, incluso a quien nunca ha usado IA.
 
+## Novedades en la 3.1
+
+- **Orbe entiende tus carpetas y archivos (Windows):** suelta el orbe sobre una carpeta o archivo del escritorio o del Explorador y pregúntale qué hay dentro: lista, tamaños, tipos, lo más pesado, cómo ordenarlo. Con **Leer contenido** activado puede leer y resumir el archivo (PDF, Word, Excel, PowerPoint, texto, imágenes). Solo se envía a Claude cuando tú preguntas.
+- **Orbe dibuja:** pídele "dibújame un gato astronauta" y te hace un dibujo original y sencillo. Con un toque lo pega en Paint (o la ventana bajo el orbe), lo copia o lo guarda. Pídele "para colorear" y te deja solo los contornos para pintarlos.
+
 ## Novedades en la 3.0
 
 - **Nuevo look (3.0.1):** Orbe ahora es una esfera de vidrio negro con un gran ojo naranja incandescente y una **aureola flotante**. Refleja la ciudad, flota suave y parpadea. La aureola muestra lo que hace: brilla fija cuando mira una ventana, gira punteada cuando piensa y late cuando responde.

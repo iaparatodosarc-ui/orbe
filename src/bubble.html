@@ -175,7 +175,7 @@ function setLabel(h){label.innerHTML=h;}
 function showLabel(){clearTimeout(labelT);label.classList.add('show');}
 function hideLabel(ms){clearTimeout(labelT);labelT=setTimeout(()=>label.classList.remove('show'),ms);}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function setTarget(t){target=t;if(t)setLabel(`<b>${L.see}</b> ${esc(t.title)}`);}
+function setTarget(t){target=t;if(!t)return;const it=t.item;setLabel(it?`<b>${it.kind==='folder'?'📁':it.kind==='file'?'📄':'🔹'}</b> ${esc(it.name)}`:`<b>${L.see}</b> ${esc(t.title)}`);}
 
 let lastState='idle';
 orbe.on('target',t=>{setTarget(t);});

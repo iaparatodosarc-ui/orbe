@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('orbe', {
   click: () => ipcRenderer.send('bubble-click'),
   menu: () => ipcRenderer.send('bubble-menu'),
   // panel
-  ask: (text, withScreen) => ipcRenderer.invoke('ask', { text, withScreen }),
+  ask: (text, withScreen, readFile) => ipcRenderer.invoke('ask', { text, withScreen, readFile }),
   stop: () => ipcRenderer.send('stop'),
   newChat: () => ipcRenderer.send('new-chat'),
   hide: () => ipcRenderer.send('panel-hide'),
@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('orbe', {
   testKey: () => ipcRenderer.invoke('test-key'),
   getTarget: () => ipcRenderer.invoke('get-target'),
   recapture: () => ipcRenderer.invoke('recapture'),
+  drawAction: (id, action, png) => ipcRenderer.invoke('draw-action', { id, action, png }),
   replyAction: (id, action, text) => ipcRenderer.invoke('reply-action', { id, action, text }),
   openUrl: u => ipcRenderer.send('open-url', u),
   on,

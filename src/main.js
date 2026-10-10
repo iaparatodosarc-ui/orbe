@@ -1,11 +1,12 @@
 // Orbe Claude — asistente de IA flotante que ve la ventana donde lo pones. Funciona solo con la API de Claude.
 // MIT License. Ver README.
-const { app, BrowserWindow, ipcMain, screen, desktopCapturer, globalShortcut, Menu, shell, safeStorage, systemPreferences, clipboard, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, desktopCapturer, globalShortcut, Menu, shell, safeStorage, systemPreferences, clipboard, powerMonitor, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
-const { SYSTEM, REPLY_TOOL, MODELS } = require('./guidelines');
+const { SYSTEM, REPLY_TOOL, DRAW_TOOL, MODELS } = require('./guidelines');
+const { describeFolder, describeFile } = require('./files');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 // El orbe hace sonidos al tocarlo: se permite el audio sin esperar otro gesto.
@@ -14,10 +15,11 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const IS_WIN = process.platform === 'win32', IS_MAC = process.platform === 'darwin';
 const BUBBLE = { w: 300, h: 175, orb: 84, ox: 18, oy: 63 };  // el orbe con su aureola arriba
 let bubbleWin, panelWin;
-let target = null;    // { hwnd, wid, title, proc, x, y, w, h, physical:bool }
+let target = null;    // { hwnd, wid, title, proc, x, y, w, h, physical:bool, item?:{name,path,kind,where} }
 let history = [];
 let busy = false, abortCtl = null;
 const proposals = new Map(); // id -> { text, target, created, decided }
+const drawings = new Map();  // id -> { svg, title, target, decided }
 
 // ---------------- configuración ----------------
 const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
@@ -168,7 +170,8 @@ function showPanel(focusInput = true) { placePanel(); panelWin.show(); panelWin.
 function setState(s) { bubbleWin?.webContents.send('state', s); }
 function react(kind) { bubbleWin?.webContents.send('react', kind); }
 function pushSound() { bubbleWin?.webContents.send('sound', { on: cfg.sounds, volume: cfg.volume }); }
-function pushTarget() { const i = target ? { title: target.title, proc: target.proc } : null; bubbleWin?.webContents.send('target', i); panelWin?.webContents.send('target', i); }
+const targetInfo = () => (target ? { title: target.title, proc: target.proc, item: target.item || null } : null);
+function pushTarget() { const i = targetInfo(); bubbleWin?.webContents.send('target', i); panelWin?.webContents.send('target', i); }
 
 // ---------------- IPC ----------------
 let dragStart = null;
@@ -182,9 +185,18 @@ ipcMain.on('drag-move', () => {
 ipcMain.handle('drag-end', async (_e, moved) => { dragStart = null; return moved ? lockUnderBubble() : null; });
 async function lockUnderBubble() {
   setState('scanning');
-  const t = await windowAtDip(orbCenter());
+  const c = orbCenter();
+  const t = await windowAtDip(c);
+  if (t && IS_WIN) {
+    // ¿hay una carpeta, archivo o ícono justo bajo el orbe? (escritorio o Explorador de archivos)
+    const p = screen.dipToScreenPoint(c);
+    bubbleWin.setIgnoreMouseEvents(true, { forward: true }); bubbleWin.setOpacity(0); await sleep(60);
+    const it = await psRaw(`item ${Math.round(p.x)} ${Math.round(p.y)}`, 6000);
+    bubbleWin.setOpacity(1); bubbleWin.setIgnoreMouseEvents(false); // el cursor sigue sobre el orbe al soltarlo
+    if (it && it.name) { t.item = it; react('gasp'); }
+  }
   target = t; pushTarget(); setState(t ? 'locked' : 'idle');
-  return t ? { title: t.title, proc: t.proc } : null;
+  return targetInfo();
 }
 ipcMain.on('bubble-click', () => { if (panelWin.isVisible()) panelWin.hide(); else showPanel(); });
 ipcMain.on('bubble-menu', () => {
@@ -192,7 +204,7 @@ ipcMain.on('bubble-menu', () => {
   Menu.buildFromTemplate([
     { label: es ? 'Abrir chat' : 'Open chat', click: () => showPanel() },
     { label: es ? 'Fijar ventana bajo el orbe' : 'Lock window under orb', click: () => lockUnderBubble() },
-    { label: es ? 'Olvidar ventana (pantalla completa)' : 'Forget window (full screen)', click: () => { target = null; pushTarget(); setState('idle'); } },
+    { label: es ? 'Olvidar ventana o archivo (pantalla completa)' : 'Forget window or file (full screen)', click: () => { target = null; pushTarget(); setState('idle'); } },
     { type: 'separator' },
     { label: es ? 'Sonidos' : 'Sounds', type: 'checkbox', checked: cfg.sounds, click: m => { cfg.sounds = m.checked; saveCfg(); pushSound(); } },
     { label: es ? 'Configuración' : 'Settings', click: () => { showPanel(false); panelWin.webContents.send('open-settings'); } },
@@ -211,10 +223,10 @@ ipcMain.handle('set-cfg', (_e, c) => {
   if (typeof c.volume === 'number' && c.volume >= 0 && c.volume <= 1) cfg.volume = c.volume;
   saveCfg(); registerHotkey(); pushSound(); return true;
 });
-ipcMain.handle('get-target', () => (target ? { title: target.title, proc: target.proc } : null));
+ipcMain.handle('get-target', () => targetInfo());
 ipcMain.handle('recapture', async () => { const s = await capture(target); return s ? s.dataUrl : null; });
 ipcMain.on('panel-hide', () => panelWin.hide());
-ipcMain.on('new-chat', () => { history = []; proposals.clear(); });
+ipcMain.on('new-chat', () => { history = []; proposals.clear(); drawings.clear(); });
 ipcMain.on('stop', () => abortCtl?.abort());
 ipcMain.on('open-url', (_e, u) => { if (/^https:\/\//.test(u)) shell.openExternal(u); });
 ipcMain.handle('test-key', async () => {
@@ -239,14 +251,14 @@ function friendly(status, body) {
 
 function buildRequest(messages) {
   const body = {
-    model: cfg.model, max_tokens: cfg.maxTokens, stream: true,
+    model: cfg.model, max_tokens: Math.max(cfg.maxTokens || 0, 8000), stream: true,  // los dibujos SVG necesitan espacio
     // Caché de prompt: las directrices (y la herramienta) se cobran ~10% en las preguntas siguientes,
     // y la conversación se va guardando en caché automáticamente.
     cache_control: { type: 'ephemeral' },
     system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages,
   };
-  if (cfg.allowReply) body.tools = [REPLY_TOOL];
+  body.tools = cfg.allowReply ? [REPLY_TOOL, DRAW_TOOL] : [DRAW_TOOL];
   return body;
 }
 
@@ -292,6 +304,13 @@ function pendingToolResults() {
   const last = history[history.length - 1];
   if (!last || last.role !== 'assistant' || !Array.isArray(last.content)) return [];
   return last.content.filter(c => c.type === 'tool_use').map(c => {
+    if (c.name === DRAW_TOOL.name) {
+      const d = drawings.get(c.id);
+      const st = !d ? 'The drawing could not be shown.' : d.decided === 'pasted' ? 'The user pasted the drawing into their window (e.g. Paint).'
+        : d.decided === 'saved' ? 'The user saved the drawing as an image.' : d.decided === 'copied' ? 'The user copied the drawing.'
+        : 'The drawing was shown in the chat.';
+      return { type: 'tool_result', tool_use_id: c.id, content: st };
+    }
     const p = proposals.get(c.id);
     const status = !p ? 'The card could not be shown.'
       : p.decided === 'written' ? 'The user authorized it and Orbe typed it into the text box (not sent; the user sends it).'
@@ -307,7 +326,7 @@ function trimHistory() {
   while (history.length && (history[0].role !== 'user' || (Array.isArray(history[0].content) && history[0].content.some(c => c.type === 'tool_result')))) history.shift();
 }
 
-ipcMain.handle('ask', async (_e, { text, withScreen }) => {
+ipcMain.handle('ask', async (_e, { text, withScreen, readFile }) => {
   if (busy) return { error: 'busy' };
   if (!ready()) return { error: 'nokey' };
   busy = true; setState('thinking');
@@ -315,10 +334,19 @@ ipcMain.handle('ask', async (_e, { text, withScreen }) => {
     const shot = withScreen ? await capture(target) : null;
     const ctxLine = target ? `[Window: "${target.title}" — app: ${target.proc || 'unknown'}]` : '[Full screen]';
     const content = [...pendingToolResults()];
+    // carpeta o archivo bajo el orbe: su contenido real (el archivo por dentro solo si el usuario activó "Leer contenido")
+    const it = target && target.item;
+    if (it && it.path) {
+      if (it.kind === 'folder') content.push({ type: 'text', text: describeFolder(it.path) });
+      else if (it.kind === 'file') content.push(...describeFile(it.path, !!readFile).blocks);
+    } else if (it) content.push({ type: 'text', text: `[Icon under the orb: "${it.name}"${it.where ? ' in ' + it.where : ''}. Its location on disk could not be resolved (it may be a shortcut, a special folder or a cloud item).]` });
     if (shot) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: shot.b64 } });
     content.push({ type: 'text', text: (shot ? ctxLine + '\n' : '') + text });
+    // las capturas y documentos antiguos se reemplazan por una nota (ahorra tokens)
     history = history.map(m => (m.role === 'user' && Array.isArray(m.content))
-      ? { role: 'user', content: m.content.map(c => c.type === 'image' ? { type: 'text', text: '[earlier screenshot omitted]' } : c) } : m);
+      ? { role: 'user', content: m.content.map(c => c.type === 'image' ? { type: 'text', text: '[earlier screenshot omitted]' }
+          : c.type === 'document' ? { type: 'text', text: '[earlier document omitted]' }
+          : (c.type === 'text' && c.text.length > 4000 && /^\[(File|Folder) shown/.test(c.text)) ? { type: 'text', text: c.text.split('\n')[0] + ' [details omitted; shown earlier]' } : c) } : m);
     history.push({ role: 'user', content });
     trimHistory();
     panelWin.webContents.send('shot', shot ? shot.dataUrl : null);
@@ -330,7 +358,10 @@ ipcMain.handle('ask', async (_e, { text, withScreen }) => {
     const cards = [];
     for (const t of out.tools) {
       blocks.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
-      if (t.name === REPLY_TOOL.name && typeof t.input.texto === 'string' && t.input.texto.trim()) {
+      if (t.name === DRAW_TOOL.name && typeof t.input.svg === 'string' && /<svg[\s>]/i.test(t.input.svg)) {
+        drawings.set(t.id, { svg: t.input.svg, title: t.input.titulo || '', target, decided: null });
+        cards.push({ id: t.id, kind: 'draw', svg: t.input.svg, title: t.input.titulo || '', canPaste: !!(target && target.hwnd) });
+      } else if (t.name === REPLY_TOOL.name && typeof t.input.texto === 'string' && t.input.texto.trim()) {
         proposals.set(t.id, { text: t.input.texto, target, created: Date.now(), decided: null });
         cards.push({ id: t.id, text: t.input.texto, para: t.input.para || '', canWrite: !!target });
       } else proposals.set(t.id, null);
@@ -389,6 +420,30 @@ ipcMain.handle('reply-action', async (_e, { id, action, text }) => {
   clipboard.writeText(finalText); p.decided = 'copied';
   showPanel(false);
   return { error: 'typefail' };
+});
+
+// ---------------- dibujos (pegar en Paint u otra ventana, copiar, guardar) ----------------
+ipcMain.handle('draw-action', async (_e, { id, action, png }) => {
+  const d = drawings.get(id);
+  if (!d) return { error: 'gone' };
+  if (typeof png !== 'string' || !png.startsWith('data:image/png;base64,')) return { error: 'bad' };
+  const img = nativeImage.createFromDataURL(png);
+  if (img.isEmpty()) return { error: 'bad' };
+  if (action === 'copy') { clipboard.writeImage(img); d.decided = 'copied'; return { ok: true }; }
+  if (action === 'save') {
+    const name = (d.title || 'dibujo-orbe').replace(/[\\/:*?"<>|]+/g, '').slice(0, 60) || 'dibujo-orbe';
+    const r = await dialog.showSaveDialog(panelWin, { defaultPath: path.join(app.getPath('pictures'), name + '.png'), filters: [{ name: 'PNG', extensions: ['png'] }] });
+    if (r.canceled || !r.filePath) return { error: 'canceled' };
+    fs.writeFileSync(r.filePath, img.toPNG()); d.decided = 'saved'; return { ok: true };
+  }
+  if (action !== 'paste') return { error: 'bad' };
+  const t = d.target || target;
+  if (!IS_WIN || !t || !t.hwnd) { clipboard.writeImage(img); d.decided = 'copied'; return { error: 'nopaste' }; }
+  clipboard.writeImage(img);
+  panelWin.hide(); await sleep(150);
+  const r = await psRaw(`paste ${t.hwnd}`, 5000);
+  if (r && r.ok) { d.decided = 'pasted'; react('happy'); return { ok: true }; }
+  d.decided = 'copied'; showPanel(false); return { error: 'typefail' };
 });
 
 // ---------------- atajo, ojos, actualizaciones ----------------
