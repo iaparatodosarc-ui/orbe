@@ -29,6 +29,7 @@ const DEFAULT_CFG = {
   voice: false, maxTokens: 1500,
   sounds: true, volume: 0.6,
   allowReply: false,           // "Orbe puede escribir respuestas por mí" (cada respuesta igual pide autorización)
+  allowFiles: false,           // "Orbe puede ver mis carpetas y archivos" (apagado hasta que el usuario lo active)
   hotkey: IS_MAC ? 'Command+Shift+Space' : 'Control+Shift+Space',
   onboarded: false,
 };
@@ -204,7 +205,7 @@ async function lockUnderBubble() {
   let t = await windowAtDip(c);
   // primero la ventana (inmediato); el ícono/carpeta se busca aparte y se agrega cuando llega
   target = t; pushTarget(); setState(t ? 'locked' : 'idle');
-  if (IS_WIN) findItemUnder(c, t, my);   // también sobre el escritorio, donde no hay "ventana" normal
+  if (IS_WIN && cfg.allowFiles) findItemUnder(c, t, my);   // solo si el usuario activó "ver carpetas y archivos"   // también sobre el escritorio, donde no hay "ventana" normal
   return targetInfo();
 }
 async function findItemUnder(c, t, my) {
@@ -233,14 +234,15 @@ ipcMain.on('bubble-menu', () => {
 });
 ipcMain.handle('get-cfg', () => {
   const k = getKey();
-  return { model: cfg.model, models: MODELS, voice: cfg.voice, sounds: cfg.sounds, volume: cfg.volume, allowReply: cfg.allowReply,
+  return { model: cfg.model, models: MODELS, voice: cfg.voice, sounds: cfg.sounds, volume: cfg.volume, allowReply: cfg.allowReply, allowFiles: cfg.allowFiles,
     hotkey: cfg.hotkey, apiKey: k ? '••••' + k.slice(-4) : '', ready: ready(), onboarded: cfg.onboarded, platform: process.platform, version: app.getVersion() };
 });
 ipcMain.handle('set-cfg', (_e, c) => {
   if (typeof c.apiKey === 'string' && c.apiKey && !c.apiKey.startsWith('••••')) setKey(c.apiKey);
   if (typeof c.model === 'string' && /^claude-[a-z0-9.\-]+$/i.test(c.model.trim())) cfg.model = c.model.trim();
-  for (const k of ['voice', 'sounds', 'allowReply', 'onboarded']) if (typeof c[k] === 'boolean') cfg[k] = c[k];
+  for (const k of ['voice', 'sounds', 'allowReply', 'allowFiles', 'onboarded']) if (typeof c[k] === 'boolean') cfg[k] = c[k];
   if (typeof c.volume === 'number' && c.volume >= 0 && c.volume <= 1) cfg.volume = c.volume;
+  if (!cfg.allowFiles && target && target.item) { delete target.item; if (target.desktop) target = null; pushTarget(); }
   saveCfg(); registerHotkey(); pushSound(); return true;
 });
 ipcMain.handle('get-target', () => targetInfo());
@@ -355,7 +357,7 @@ ipcMain.handle('ask', async (_e, { text, withScreen, readFile }) => {
     const ctxLine = target ? `[Window: "${target.title}" — app: ${target.proc || 'unknown'}]` : '[Full screen]';
     const content = [...pendingToolResults()];
     // carpeta o archivo bajo el orbe: su contenido real (el archivo por dentro solo si el usuario activó "Leer contenido")
-    const it = target && target.item;
+    const it = cfg.allowFiles && target && target.item;
     if (it && it.path) {
       if (it.kind === 'folder') content.push({ type: 'text', text: describeFolder(it.path) });
       else if (it.kind === 'file') content.push(...describeFile(it.path, !!readFile).blocks);

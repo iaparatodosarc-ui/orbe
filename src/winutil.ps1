@@ -103,8 +103,54 @@ public class OrbeHit {
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr h, ref POINT p);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+  [DllImport("kernel32.dll")] public static extern IntPtr VirtualAllocEx(IntPtr p, IntPtr a, UIntPtr size, uint type, uint prot);
+  [DllImport("kernel32.dll")] public static extern bool VirtualFreeEx(IntPtr p, IntPtr a, UIntPtr size, uint type);
+  [DllImport("kernel32.dll")] public static extern bool WriteProcessMemory(IntPtr p, IntPtr a, byte[] b, UIntPtr size, out UIntPtr done);
+  [DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(IntPtr p, IntPtr a, byte[] b, UIntPtr size, out UIntPtr done);
+  [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
   public static long Root(int x, int y) { var p = new POINT{X=x,Y=y}; return GetAncestor(WindowFromPoint(p), 2).ToInt64(); }
   public static string Cls(long h) { var sb = new StringBuilder(256); GetClassName(new IntPtr(h), sb, 256); return sb.ToString(); }
+  // Nombre del icono del escritorio bajo el punto. El escritorio es una lista clasica (SysListView32) que
+  // en Windows 11 no siempre expone sus iconos por UI Automation; se le pregunta directo con LVM_HITTEST.
+  public static string ListViewNameAt(int x, int y) {
+    if (IntPtr.Size != 8) return null;
+    var p = new POINT{X=x,Y=y}; IntPtr lv = WindowFromPoint(p);
+    if (Cls(lv.ToInt64()) != "SysListView32") return null;
+    ScreenToClient(lv, ref p);
+    uint pid; GetWindowThreadProcessId(lv, out pid);
+    IntPtr hp = OpenProcess(0x0008 | 0x0010 | 0x0020, false, pid);
+    if (hp == IntPtr.Zero) return null;
+    IntPtr mem = VirtualAllocEx(hp, IntPtr.Zero, (UIntPtr)4096, 0x3000, 0x04);
+    try {
+      if (mem == IntPtr.Zero) return null;
+      UIntPtr n;
+      byte[] ht = new byte[24];
+      BitConverter.GetBytes(p.X).CopyTo(ht, 0); BitConverter.GetBytes(p.Y).CopyTo(ht, 4);
+      if (!WriteProcessMemory(hp, mem, ht, (UIntPtr)ht.Length, out n)) return null;
+      int idx = SendMessage(lv, 0x1012, IntPtr.Zero, mem).ToInt32();          // LVM_HITTEST
+      if (idx < 0) return null;
+      ReadProcessMemory(hp, mem, ht, (UIntPtr)ht.Length, out n);
+      if ((BitConverter.ToUInt32(ht, 8) & 0x0E) == 0) return null;               // LVHT_ONITEM
+      byte[] it = new byte[88];                                                   // LVITEMW (x64)
+      BitConverter.GetBytes(idx).CopyTo(it, 4);
+      long textAddr = mem.ToInt64() + 512;
+      BitConverter.GetBytes(textAddr).CopyTo(it, 24);
+      BitConverter.GetBytes(260).CopyTo(it, 32);
+      if (!WriteProcessMemory(hp, mem, it, (UIntPtr)it.Length, out n)) return null;
+      int len = SendMessage(lv, 0x1073, new IntPtr(idx), mem).ToInt32();        // LVM_GETITEMTEXTW
+      if (len <= 0 || len > 260) return null;
+      byte[] tb = new byte[len * 2];
+      if (!ReadProcessMemory(hp, new IntPtr(textAddr), tb, (UIntPtr)tb.Length, out n)) return null;
+      return Encoding.Unicode.GetString(tb);
+    } finally {
+      if (mem != IntPtr.Zero) VirtualFreeEx(hp, mem, UIntPtr.Zero, 0x8000);
+      CloseHandle(hp);
+    }
+  }
 }
 "@
 $script:shell = $null
@@ -120,14 +166,41 @@ function Get-ItemAt([int]$x, [int]$y) {
   $root = [OrbeHit]::Root($x, $y)
   if ($root -eq 0) { return $null }
   $cls = [OrbeHit]::Cls($root)
-  $el = $null
-  try { $el = [System.Windows.Automation.AutomationElement]::FromPoint((New-Object System.Windows.Point($x, $y))) } catch { return $null }
-  $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
-  $name = $null; $i = 0
-  while ($el -ne $null -and $i -lt 8) {
-    $ct = $el.Current.ControlType
-    if ($ct -eq [System.Windows.Automation.ControlType]::ListItem -or $ct -eq [System.Windows.Automation.ControlType]::DataItem) { $name = $el.Current.Name; break }
-    $el = $walker.GetParent($el); $i++
+  $name = $null
+  # 1) escritorio: preguntarle directo a la lista de iconos
+  if ($cls -eq 'Progman' -or $cls -eq 'WorkerW') {
+    try { $name = [OrbeHit]::ListViewNameAt($x, $y) } catch { $name = $null }
+  }
+  # 2) UI Automation: el elemento bajo el punto o uno de sus padres
+  if (-not $name) {
+    $start = $null
+    try { $start = [System.Windows.Automation.AutomationElement]::FromPoint((New-Object System.Windows.Point($x, $y))) } catch { return $null }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $LI = [System.Windows.Automation.ControlType]::ListItem; $DI = [System.Windows.Automation.ControlType]::DataItem
+    $el = $start; $i = 0
+    while ($el -ne $null -and $i -lt 8) {
+      $ct = $el.Current.ControlType
+      if ($ct -eq $LI -or $ct -eq $DI) { $name = $el.Current.Name; break }
+      $el = $walker.GetParent($el); $i++
+    }
+    # 3) si el punto cae sobre la lista y no sobre un icono: buscar el hijo cuyo rectangulo lo contiene
+    if (-not $name -and $start -ne $null) {
+      $cp = [System.Windows.Automation.AutomationElement]::ControlTypeProperty
+      $cond = New-Object System.Windows.Automation.OrCondition((New-Object System.Windows.Automation.PropertyCondition($cp, $LI)), (New-Object System.Windows.Automation.PropertyCondition($cp, $DI)))
+      $cont = $start; $j = 0
+      while ($cont -ne $null -and $j -lt 3 -and -not $name) {
+        $kids = $null
+        try { $kids = $cont.FindAll([System.Windows.Automation.TreeScope]::Children, $cond) } catch {}
+        if ($kids -ne $null -and $kids.Count -gt 0) {
+          foreach ($k in $kids) {
+            $r = $k.Current.BoundingRectangle
+            if (-not $r.IsEmpty -and $x -ge $r.Left -and $x -lt $r.Right -and $y -ge $r.Top -and $y -lt $r.Bottom) { $name = $k.Current.Name; break }
+          }
+          break
+        }
+        $cont = $walker.GetParent($cont); $j++
+      }
+    }
   }
   if (-not $name) { return $null }
   $item = $null; $where = ''

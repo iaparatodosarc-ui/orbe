@@ -110,8 +110,12 @@ textarea:focus{border-color:var(--or)}
     <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sReply"> <span data-i="reply"></span></label>
     <div class="note" data-ih="replyNote"></div>
     <div class="sep"></div>
+    <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sFiles"> <span data-i="files"></span></label>
+    <div class="note" data-ih="filesNote"></div>
+    <div class="sep"></div>
     <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sVoice"> <span data-i="voice"></span></label>
     <div class="note" data-ih="setNote"></div>
+    <div class="note" id="sVer" style="opacity:.7"></div>
     <div class="row"><button class="btn g" id="sCancel" data-i="close"></button><button class="btn" id="sSave" data-i="save"></button></div>
   </div>
   <div id="zoom"><img id="zimg"></div>
@@ -124,6 +128,7 @@ const T=ES?{
  hint:'<b>Arrastra el orbe</b> sobre cualquier ventana o pestaña<br>y pregúntame lo que quieras sobre lo que ves.<br><br>Atajo: <b>Ctrl + Shift + Espacio</b> → mira la ventana activa.<br>Dictado por voz: <b>Win + H</b> en el cuadro de texto.',
  setTitle:'Configuración',key:'API key de Claude (Anthropic)',keyNote1:'Créala en',keyNote2:'→ API Keys. Se guarda cifrada en este equipo. El uso de la API se cobra según consumo.',model:'Modelo de Claude',test:'Probar key',testing:'Probando…',testok:'✓ Funciona',
  mnote:'Opus responde mejor; Haiku es más rápido y barato.',sounds:'Sonidos del orbe',volume:'Volumen',reply:'Orbe puede escribir respuestas por mí',
+ files:'Orbe puede ver mis carpetas y archivos',filesNote:'Solo en Windows. Al soltar el orbe sobre una carpeta o archivo, Orbe sabrá qué es y qué tiene dentro. <b>El contenido de un archivo solo se lee si además activas "Leer contenido"</b> en el panel. Nada se envía hasta que tú preguntas. Apagado = Orbe solo ve la captura de pantalla.',ver:'Versión',
  replyNote:'Cuando le pidas responder un mensaje, Orbe te mostrará el borrador. <b>Solo lo escribe si tú tocas "Autorizar"</b>, estando frente al equipo, en la ventana donde está el orbe. Nunca lo envía: el botón Enviar lo tocas tú.',
  auth:'✅ Autorizar y escribir',copyD:'Copiar',discard:'Descartar',to:'Respuesta para',draft:'Borrador listo',
  cardNote:'Revisa y edita si quieres. Al autorizar, Orbe la escribe en el cuadro de texto activo de la ventana; tú decides si la envías.',
@@ -143,6 +148,7 @@ const T=ES?{
  hint:'<b>Drag the orb</b> onto any window or tab<br>and ask me anything about what you see.<br><br>Shortcut: <b>Ctrl + Shift + Space</b> → look at the active window.',
  setTitle:'Settings',key:'Claude API key (Anthropic)',keyNote1:'Create it at',keyNote2:'→ API Keys. Stored encrypted on this device. API usage is billed per use.',model:'Claude model',test:'Test key',testing:'Testing…',testok:'✓ Works',
  mnote:'Opus answers best; Haiku is faster and cheaper.',sounds:'Orb sounds',volume:'Volume',reply:'Orbe can write replies for me',
+ files:'Orbe can see my folders and files',filesNote:'Windows only. When you drop the orb on a folder or file, Orbe knows what it is and what is inside. <b>A file\'s content is only read if you also turn on "Read content"</b> in the panel. Nothing is sent until you ask. Off = Orbe only sees the screenshot.',ver:'Version',
  replyNote:'When you ask Orbe to reply to a message, it shows you a draft. <b>It only types it if you tap "Authorize"</b> while at the computer, in the window under the orb. It never sends it: you press Send.',
  auth:'✅ Authorize and type',copyD:'Copy',discard:'Discard',to:'Reply to',draft:'Draft ready',
  cardNote:'Review and edit if you like. When authorized, Orbe types it into the active text box of that window; you decide whether to send it.',
@@ -271,12 +277,12 @@ function drawCard(c){
 // configuración
 async function openSet(welcome){const c=await orbe.getCfg();$('sKey').value=c.apiKey||'';$('sModel').value=c.model||'';
   $('mlist').innerHTML=(c.models||[]).map(m=>`<option value="${m.id}">${esc(m.label)}</option>`).join('');$('mnote').textContent=T.mnote;
-  $('sVoice').checked=!!c.voice;$('sSounds').checked=c.sounds!==false;$('sVol').value=c.volume??.6;$('sReply').checked=!!c.allowReply;$('sTestR').textContent='';
+  $('sVoice').checked=!!c.voice;$('sSounds').checked=c.sounds!==false;$('sVol').value=c.volume??.6;$('sReply').checked=!!c.allowReply;$('sFiles').checked=!!c.allowFiles;$('sVer').textContent=T.ver+' '+(c.version||'');$('sTestR').textContent='';
   $('welcome').style.display=(welcome||!c.onboarded)?'':'none';
   $('set').classList.add('on');setTimeout(()=>$('sKey').focus(),50);}
 $('bSet').onclick=()=>openSet(false);$('sCancel').onclick=()=>$('set').classList.remove('on');
 $('lnk').onclick=()=>orbe.openUrl('https://console.anthropic.com/settings/keys');
-function cfgFromForm(){return{apiKey:$('sKey').value,model:$('sModel').value,voice:$('sVoice').checked,sounds:$('sSounds').checked,volume:+$('sVol').value,allowReply:$('sReply').checked,onboarded:true};}
+function cfgFromForm(){return{apiKey:$('sKey').value,model:$('sModel').value,voice:$('sVoice').checked,sounds:$('sSounds').checked,volume:+$('sVol').value,allowReply:$('sReply').checked,allowFiles:$('sFiles').checked,onboarded:true};}
 $('sTest').onclick=async()=>{$('sTestR').textContent=T.testing;await orbe.setCfg(cfgFromForm());const r=await orbe.testKey();$('sTestR').textContent=r.ok?T.testok:'⚠ '+ERR(r.error);};
 $('sSave').onclick=async()=>{await orbe.setCfg(cfgFromForm());
   setVoice($('sVoice').checked);$('set').classList.remove('on');add('a',`<p>${T.saved}</p>`);};
