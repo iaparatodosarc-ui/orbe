@@ -48,29 +48,41 @@ const ready = () => !!getKey();
 
 // ---------------- detección de ventanas (por sistema) ----------------
 const res = p => app.isPackaged ? p.replace('app.asar', 'app.asar.unpacked') : p;
-let ps = null, psBuf = '', psQueue = [];
-function startPs() {
-  if (!IS_WIN) return;
-  ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', res(path.join(__dirname, 'winutil.ps1'))], { windowsHide: true });
-  ps.stdout.setEncoding('utf8');
-  ps.stdout.on('data', d => {
-    psBuf += d; let i;
-    while ((i = psBuf.indexOf('\n')) >= 0) {
-      const line = psBuf.slice(0, i).trim(); psBuf = psBuf.slice(i + 1);
-      const r = psQueue.shift(); if (!r) continue;
-      try { r(JSON.parse(line)); } catch { r(null); }
-    }
-  });
-  ps.on('exit', () => { ps = null; psQueue.splice(0).forEach(r => r(null)); });
+// Ayudante de Windows (PowerShell). Hay dos: uno para ventanas/pegar y otro para íconos (que puede tardar más),
+// así una búsqueda lenta nunca bloquea a la otra. Cada pedido lleva un id y su respuesta vuelve con el mismo id.
+class PsWorker {
+  constructor() { this.p = null; this.buf = ''; this.pending = new Map(); this.seq = 0; }
+  start() {
+    if (!IS_WIN) return;
+    this.p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', res(path.join(__dirname, 'winutil.ps1'))], { windowsHide: true });
+    this.p.stdout.setEncoding('utf8');
+    this.p.stdout.on('data', d => {
+      this.buf += d; let i;
+      while ((i = this.buf.indexOf('\n')) >= 0) {
+        const line = this.buf.slice(0, i).trim(); this.buf = this.buf.slice(i + 1);
+        const sp = line.indexOf(' '); if (sp < 0) continue;
+        const done = this.pending.get(line.slice(0, sp)); if (!done) continue;   // respuesta tardía de un pedido ya vencido: se ignora
+        let o = null; try { o = JSON.parse(line.slice(sp + 1)); } catch {}
+        done(o);
+      }
+    });
+    this.p.on('exit', () => { this.p = null; for (const d of [...this.pending.values()]) d(null); });
+  }
+  ask(cmd, ms = 6000) {
+    return new Promise(resolve => {
+      if (!this.p) this.start(); if (!this.p) return resolve(null);
+      const id = String(++this.seq);
+      const done = v => { clearTimeout(timer); this.pending.delete(id); resolve(v); };
+      const timer = setTimeout(() => done(null), ms);
+      this.pending.set(id, done);
+      try { this.p.stdin.write(id + ' ' + cmd + '\n'); } catch { done(null); }
+    });
+  }
+  kill() { try { this.p?.kill(); } catch {} }
 }
-function psRaw(cmd, ms = 6000) {
-  return new Promise(resolve => {
-    if (!ps) startPs(); if (!ps) return resolve(null);
-    const done = v => { clearTimeout(timer); resolve(v); };
-    const timer = setTimeout(() => { const k = psQueue.indexOf(done); if (k >= 0) psQueue.splice(k, 1); resolve(null); }, ms);
-    psQueue.push(done); ps.stdin.write(cmd + '\n');
-  });
-}
+const psMain = new PsWorker(), psItems = new PsWorker();
+function startPs() { psMain.start(); psItems.start(); }
+const psRaw = (cmd, ms) => psMain.ask(cmd, ms);
 async function psWin(cmd) { const o = await psRaw(cmd); return o && o.title !== undefined ? { ...o, physical: true } : null; }
 function run(cmd, args, input) {
   return new Promise(r => {
@@ -105,6 +117,7 @@ const orbCenter = () => { const b = bubbleWin.getBounds(); return { x: b.x + BUB
 // ---------------- captura ----------------
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function capture(t) {
+  if (t && (t.desktop || t.w == null)) t = null;   // escritorio: pantalla completa
   let dip = null;
   if (t) dip = t.physical && IS_WIN ? screen.screenToDipRect(null, { x: t.x, y: t.y, width: t.w, height: t.h }) : { x: t.x, y: t.y, width: t.w, height: t.h };
   const d = dip ? screen.getDisplayMatching(dip) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
@@ -183,20 +196,27 @@ ipcMain.on('drag-move', () => {
   if (panelWin.isVisible()) placePanel();
 });
 ipcMain.handle('drag-end', async (_e, moved) => { dragStart = null; return moved ? lockUnderBubble() : null; });
+let lockSeq = 0;
 async function lockUnderBubble() {
+  const my = ++lockSeq;
   setState('scanning');
   const c = orbCenter();
-  const t = await windowAtDip(c);
-  if (t && IS_WIN) {
-    // ¿hay una carpeta, archivo o ícono justo bajo el orbe? (escritorio o Explorador de archivos)
-    const p = screen.dipToScreenPoint(c);
-    bubbleWin.setIgnoreMouseEvents(true, { forward: true }); bubbleWin.setOpacity(0); await sleep(60);
-    const it = await psRaw(`item ${Math.round(p.x)} ${Math.round(p.y)}`, 6000);
-    bubbleWin.setOpacity(1); bubbleWin.setIgnoreMouseEvents(false); // el cursor sigue sobre el orbe al soltarlo
-    if (it && it.name) { t.item = it; react('gasp'); }
-  }
+  let t = await windowAtDip(c);
+  // primero la ventana (inmediato); el ícono/carpeta se busca aparte y se agrega cuando llega
   target = t; pushTarget(); setState(t ? 'locked' : 'idle');
+  if (IS_WIN) findItemUnder(c, t, my);   // también sobre el escritorio, donde no hay "ventana" normal
   return targetInfo();
+}
+async function findItemUnder(c, t, my) {
+  const p = screen.dipToScreenPoint(c);
+  bubbleWin.setIgnoreMouseEvents(true, { forward: true }); bubbleWin.setOpacity(0);   // que el orbe no tape el ícono
+  const restore = setTimeout(() => { bubbleWin.setOpacity(1); bubbleWin.setIgnoreMouseEvents(false); }, 700);
+  await sleep(60);
+  const it = await psItems.ask(`item ${Math.round(p.x)} ${Math.round(p.y)}`, 5000);
+  clearTimeout(restore); bubbleWin.setOpacity(1); bubbleWin.setIgnoreMouseEvents(false);
+  if (my !== lockSeq || !it || !it.name) return;   // el orbe ya se movió o no hay ícono
+  if (!t) t = { title: it.where || 'Escritorio', proc: 'explorer', desktop: true };  // escritorio: la captura es la pantalla completa
+  t.item = it; target = t; pushTarget(); setState('locked'); react('gasp');
 }
 ipcMain.on('bubble-click', () => { if (panelWin.isVisible()) panelWin.hide(); else showPanel(); });
 ipcMain.on('bubble-menu', () => {
@@ -475,5 +495,5 @@ app.whenReady().then(() => {
   if (!cfg.onboarded || !ready()) setTimeout(() => { showPanel(false); panelWin.webContents.send('open-settings', { welcome: true }); }, 1200);
 });
 app.on('second-instance', () => showPanel());
-app.on('will-quit', () => { globalShortcut.unregisterAll(); try { ps?.kill(); } catch {} });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); psMain.kill(); psItems.kill(); });
 app.on('window-all-closed', () => {});

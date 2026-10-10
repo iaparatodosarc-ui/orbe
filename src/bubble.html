@@ -164,12 +164,23 @@ orb.addEventListener('mouseleave',()=>{if(!dragging)orbe.mouseIgnore(true);if(!d
 orb.addEventListener('contextmenu',e=>{e.preventDefault();orbe.menu();});
 orb.addEventListener('pointerdown',e=>{if(e.button!==0)return;audio();orb.setPointerCapture(e.pointerId);dragging=true;moved=false;down={x:e.screenX,y:e.screenY};
   orbe.dragStart();timer=setInterval(()=>orbe.dragMove(),16);});
-orb.addEventListener('pointermove',e=>{if(dragging&&down&&Math.hypot(e.screenX-down.x,e.screenY-down.y)>4){if(!moved){moved=true;orb.classList.add('drag');play('pickup');setLabel(L.drop);showLabel();}}});
-orb.addEventListener('pointerup',async e=>{if(!dragging)return;dragging=false;clearInterval(timer);orb.classList.remove('drag');
-  try{orb.releasePointerCapture(e.pointerId);}catch{}
+orb.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  if(e.buttons===0){endDrag(e);return;}   // el botón ya se soltó aunque no llegó el aviso: soltar
+  if(down&&Math.hypot(e.screenX-down.x,e.screenY-down.y)>4){if(!moved){moved=true;orb.classList.add('drag');play('pickup');setLabel(L.drop);showLabel();}}});
+// soltar siempre, aunque Windows pierda el aviso de "botón levantado"
+async function endDrag(e){
+  if(!dragging)return;dragging=false;clearInterval(timer);orb.classList.remove('drag');
+  try{if(e&&e.pointerId!=null)orb.releasePointerCapture(e.pointerId);}catch{}
   if(!moved){react();orbe.click();return;}
   play('plop');setLabel(L.look);const t=await orbe.dragEnd(true);
-  if(t){setTarget(t);showLabel();hideLabel(2600);react('jelly');}else{setLabel(L.full);hideLabel(1600);}});
+  if(t){setTarget(t);showLabel();hideLabel(2600);react('jelly');}else{setLabel(L.full);hideLabel(1600);}
+}
+orb.addEventListener('pointerup',endDrag);
+orb.addEventListener('pointercancel',endDrag);
+orb.addEventListener('lostpointercapture',e=>{if(dragging)endDrag(e);});
+window.addEventListener('mouseup',e=>{if(dragging)endDrag(e);});
+window.addEventListener('blur',()=>{if(dragging)endDrag(null);});
 
 function setLabel(h){label.innerHTML=h;}
 function showLabel(){clearTimeout(labelT);label.classList.add('show');}

@@ -1,6 +1,6 @@
 # Orbe - ayudante de Windows: encuentra la ventana bajo un punto o la ventana activa,
 # y (solo cuando el usuario lo autoriza en el chat) escribe una respuesta en ella.
-# Protocolo por stdin/stdout, una linea por pedido:
+# Protocolo por stdin/stdout, una linea por pedido (precedida por un id que vuelve en la respuesta):
 #   point <x> <y> <pidExcluir>   -> ventana visible mas arriba que contiene el punto (coords fisicas)
 #   fg <pidExcluir>              -> ventana en primer plano
 #   item <x> <y>                -> icono/archivo/carpeta bajo el punto (escritorio o Explorador): {name,path,kind,where}
@@ -151,34 +151,40 @@ function Get-ItemAt([int]$x, [int]$y) {
   return @{ name = $item.Name; path = $item.FullName; kind = $kind; where = $where }
 }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-while (($line = [Console]::In.ReadLine()) -ne $null) {
-  $p = $line.Trim().Split(' ')
-  $info = $null
-  if ($p[0] -eq 'item') {
-    $r = $null
-    try { $r = Get-ItemAt ([int]$p[1]) ([int]$p[2]) } catch { $r = $null }
-    if ($r -ne $null) { [Console]::Out.WriteLine(([pscustomobject]$r | ConvertTo-Json -Compress)) } else { [Console]::Out.WriteLine('{}') }
-    [Console]::Out.Flush()
-    continue
-  }
-  if ($p[0] -eq 'paste') {
-    $ok = $false
-    try { $ok = [OrbeWin]::Paste([int64]$p[1]) } catch { $ok = $false }
-    [Console]::Out.WriteLine((@{ ok = $ok } | ConvertTo-Json -Compress))
-    [Console]::Out.Flush()
-    continue
-  }
-  try {
-    if ($p[0] -eq 'point') { $info = [OrbeWin]::AtPoint([int]$p[1], [int]$p[2], [uint32]$p[3]) }
-    elseif ($p[0] -eq 'fg') { $info = [OrbeWin]::Foreground([uint32]$p[1]) }
-  } catch { $info = $null }
-  if ($info -ne $null) {
-    $proc = ''
-    try { $proc = (Get-Process -Id $info.pid).ProcessName } catch {}
-    $o = [pscustomobject]@{ hwnd = $info.hwnd; title = $info.title; proc = $proc; x = $info.x; y = $info.y; w = $info.w; h = $info.h }
-    [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress))
-  } else {
-    [Console]::Out.WriteLine('{}')
-  }
+# Cada pedido llega como "<id> <comando> <args...>" y cada respuesta sale como "<id> <json>",
+# asi una respuesta lenta nunca se confunde con la de otro pedido.
+function Send-Reply([string]$id, $obj) {
+  $json = if ($obj -eq $null) { '{}' } else { ($obj | ConvertTo-Json -Compress) }
+  [Console]::Out.WriteLine($id + ' ' + $json)
   [Console]::Out.Flush()
+}
+while (($line = [Console]::In.ReadLine()) -ne $null) {
+  $all = $line.Trim().Split(' ')
+  if ($all.Length -lt 2) { continue }
+  $id = $all[0]
+  $p = @($all | Select-Object -Skip 1)
+  try {
+    if ($p[0] -eq 'item') {
+      $r = $null
+      try { $r = Get-ItemAt ([int]$p[1]) ([int]$p[2]) } catch { $r = $null }
+      if ($r -ne $null) { Send-Reply $id ([pscustomobject]$r) } else { Send-Reply $id $null }
+      continue
+    }
+    if ($p[0] -eq 'paste') {
+      $ok = $false
+      try { $ok = [OrbeWin]::Paste([int64]$p[1]) } catch { $ok = $false }
+      Send-Reply $id ([pscustomobject]@{ ok = $ok })
+      continue
+    }
+    $info = $null
+    try {
+      if ($p[0] -eq 'point') { $info = [OrbeWin]::AtPoint([int]$p[1], [int]$p[2], [uint32]$p[3]) }
+      elseif ($p[0] -eq 'fg') { $info = [OrbeWin]::Foreground([uint32]$p[1]) }
+    } catch { $info = $null }
+    if ($info -ne $null) {
+      $proc = ''
+      try { $proc = (Get-Process -Id $info.pid).ProcessName } catch {}
+      Send-Reply $id ([pscustomobject]@{ hwnd = $info.hwnd; title = $info.title; proc = $proc; x = $info.x; y = $info.y; w = $info.w; h = $info.h })
+    } else { Send-Reply $id $null }
+  } catch { Send-Reply $id $null }
 }
