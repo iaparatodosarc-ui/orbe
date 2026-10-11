@@ -16,6 +16,7 @@
       halo: 1,           // intensidad de la aureola 0..1.5
       haloSpin: 0,       // giro de la aureola (para "pensando")
       haloDash: false,   // aureola punteada (sin ventana fijada)
+      wave: null,        // mientras habla: niveles 0..1 de la voz (la aureola se vuelve una señal con picos)
       scaleX: 1, scaleY: 1, rot: 0, dy: 0,
     };
   }
@@ -35,7 +36,27 @@
     const a = Math.min(1.5, s.halo);
     // la aureola tiene parte de atrás y de adelante: se dibuja en dos mitades
     const start = front ? 0 : Math.PI, end = front ? Math.PI : Math.PI * 2;
-    const path = () => { ctx.beginPath(); ctx.ellipse(cx, hy, rx, ry, 0, start, end); };
+    let path = () => { ctx.beginPath(); ctx.ellipse(cx, hy, rx, ry, 0, start, end); };
+    const w = s.wave;
+    if (w && w.length) {
+      // la aureola como señal de frecuencia: picos hacia arriba y hacia abajo según la voz
+      const n = w.length, amp = r * 0.4, M = 200;
+      const val = f => {                       // valor suavizado, espejado para que ambos lados de la aureola se parezcan
+        const x = (f % (2 * n)); const i = x < n ? x : 2 * n - x; const i0 = Math.floor(i), i1 = Math.min(n - 1, i0 + 1), k = i - i0;
+        return (w[Math.min(n - 1, i0)] || 0) * (1 - k) + (w[i1] || 0) * k;
+      };
+      path = () => {
+        ctx.beginPath();
+        for (let j = 0; j <= M; j++) {
+          const th = start + (end - start) * (j / M);
+          const f = (th / (Math.PI * 2)) * 2 * n;                 // posición en la señal
+          const env = 0.25 + 0.75 * Math.abs(Math.sin(th));            // más tranquila en los costados de la aureola
+          const d = val(f) * Math.sin(f * Math.PI * 0.8 + s.t * 9) * amp * env;   // sube y baja
+          const x = cx + rx * Math.cos(th), y = hy + ry * Math.sin(th) - d;
+          if (j) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+      };
+    }
     ctx.save();
     if (s.haloDash) ctx.setLineDash([r * 0.12, r * 0.1]);
     if (s.haloSpin) ctx.lineDashOffset = -s.haloSpin * r;

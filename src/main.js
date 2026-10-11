@@ -26,7 +26,7 @@ const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_CFG = {
   apiKeyEnc: '', apiKeyPlain: '',
   model: 'claude-opus-5-5',
-  voice: false, maxTokens: 1500,
+  voice: false, maxTokens: 1500, ttsVoice: '', ttsRate: 1.0, convo: true, allowTalk: false, voiceHotkey: 'Control+Alt+Space',
   sounds: true, volume: 0.6,
   allowReply: false,           // "Orbe puede escribir respuestas por mí" (cada respuesta igual pide autorización)
   allowFiles: false,           // "Orbe puede ver mis carpetas y archivos" (apagado hasta que el usuario lo active)
@@ -52,10 +52,10 @@ const res = p => app.isPackaged ? p.replace('app.asar', 'app.asar.unpacked') : p
 // Ayudante de Windows (PowerShell). Hay dos: uno para ventanas/pegar y otro para íconos (que puede tardar más),
 // así una búsqueda lenta nunca bloquea a la otra. Cada pedido lleva un id y su respuesta vuelve con el mismo id.
 class PsWorker {
-  constructor() { this.p = null; this.buf = ''; this.pending = new Map(); this.seq = 0; }
+  constructor(script = 'winutil.ps1') { this.script = script; this.p = null; this.buf = ''; this.pending = new Map(); this.seq = 0; }
   start() {
     if (!IS_WIN) return;
-    this.p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', res(path.join(__dirname, 'winutil.ps1'))], { windowsHide: true });
+    this.p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', res(path.join(__dirname, this.script))], { windowsHide: true });
     this.p.stdout.setEncoding('utf8');
     this.p.stdout.on('data', d => {
       this.buf += d; let i;
@@ -82,7 +82,9 @@ class PsWorker {
   kill() { try { this.p?.kill(); } catch {} }
 }
 const psMain = new PsWorker(), psItems = new PsWorker();
-function startPs() { psMain.start(); psItems.start(); }
+// voz: uno escucha y otro prepara el audio, así hablar y escuchar nunca se bloquean entre sí
+const psListen = new PsWorker('voice.ps1'), psSpeak = new PsWorker('voice.ps1');
+function startPs() { psMain.start(); psItems.start(); psSpeak.start(); }
 const psRaw = (cmd, ms) => psMain.ask(cmd, ms);
 async function psWin(cmd) { const o = await psRaw(cmd); return o && o.title !== undefined ? { ...o, physical: true } : null; }
 function run(cmd, args, input) {
@@ -219,11 +221,16 @@ async function findItemUnder(c, t, my) {
   if (!t) t = { title: it.where || 'Escritorio', proc: 'explorer', desktop: true };  // escritorio: la captura es la pantalla completa
   t.item = it; target = t; pushTarget(); setState('locked'); react('gasp');
 }
-ipcMain.on('bubble-click', () => { if (panelWin.isVisible()) panelWin.hide(); else showPanel(); });
+let voiceActive = false;
+ipcMain.on('bubble-click', () => {
+  if (voiceActive || listening) { panelWin.webContents.send('voice-stop'); return; }   // tocar el orbe lo hace callar o dejar de escuchar
+  if (panelWin.isVisible()) panelWin.hide(); else showPanel();
+});
 ipcMain.on('bubble-menu', () => {
   const es = app.getLocale().startsWith('es');
   Menu.buildFromTemplate([
     { label: es ? 'Abrir chat' : 'Open chat', click: () => showPanel() },
+    ...(IS_WIN && cfg.allowTalk ? [{ label: es ? '🎤 Hablarle (Ctrl + Alt + Espacio)' : '🎤 Talk (Ctrl + Alt + Space)', click: () => { showPanel(false); panelWin.webContents.send('voice-toggle'); } }] : []),
     { label: es ? 'Fijar ventana bajo el orbe' : 'Lock window under orb', click: () => lockUnderBubble() },
     { label: es ? 'Olvidar ventana o archivo (pantalla completa)' : 'Forget window or file (full screen)', click: () => { target = null; pushTarget(); setState('idle'); } },
     { type: 'separator' },
@@ -235,13 +242,15 @@ ipcMain.on('bubble-menu', () => {
 ipcMain.handle('get-cfg', () => {
   const k = getKey();
   return { model: cfg.model, models: MODELS, voice: cfg.voice, sounds: cfg.sounds, volume: cfg.volume, allowReply: cfg.allowReply, allowFiles: cfg.allowFiles,
-    hotkey: cfg.hotkey, apiKey: k ? '••••' + k.slice(-4) : '', ready: ready(), onboarded: cfg.onboarded, platform: process.platform, version: app.getVersion() };
+    hotkey: cfg.hotkey, ttsVoice: cfg.ttsVoice, ttsRate: cfg.ttsRate, convo: cfg.convo, allowTalk: cfg.allowTalk, voiceHotkey: cfg.voiceHotkey, apiKey: k ? '••••' + k.slice(-4) : '', ready: ready(), onboarded: cfg.onboarded, platform: process.platform, version: app.getVersion() };
 });
 ipcMain.handle('set-cfg', (_e, c) => {
   if (typeof c.apiKey === 'string' && c.apiKey && !c.apiKey.startsWith('••••')) setKey(c.apiKey);
   if (typeof c.model === 'string' && /^claude-[a-z0-9.\-]+$/i.test(c.model.trim())) cfg.model = c.model.trim();
-  for (const k of ['voice', 'sounds', 'allowReply', 'allowFiles', 'onboarded']) if (typeof c[k] === 'boolean') cfg[k] = c[k];
+  for (const k of ['voice', 'sounds', 'allowReply', 'allowFiles', 'onboarded', 'convo', 'allowTalk']) if (typeof c[k] === 'boolean') cfg[k] = c[k];
   if (typeof c.volume === 'number' && c.volume >= 0 && c.volume <= 1) cfg.volume = c.volume;
+  if (typeof c.ttsVoice === 'string' && c.ttsVoice.length < 100) cfg.ttsVoice = c.ttsVoice;
+  if (typeof c.ttsRate === 'number' && c.ttsRate >= 0.6 && c.ttsRate <= 1.8) cfg.ttsRate = c.ttsRate;
   if (!cfg.allowFiles && target && target.item) { delete target.item; if (target.desktop) target = null; pushTarget(); }
   saveCfg(); registerHotkey(); pushSound(); return true;
 });
@@ -348,7 +357,7 @@ function trimHistory() {
   while (history.length && (history[0].role !== 'user' || (Array.isArray(history[0].content) && history[0].content.some(c => c.type === 'tool_result')))) history.shift();
 }
 
-ipcMain.handle('ask', async (_e, { text, withScreen, readFile }) => {
+ipcMain.handle('ask', async (_e, { text, withScreen, readFile, spoken }) => {
   if (busy) return { error: 'busy' };
   if (!ready()) return { error: 'nokey' };
   busy = true; setState('thinking');
@@ -363,7 +372,7 @@ ipcMain.handle('ask', async (_e, { text, withScreen, readFile }) => {
       else if (it.kind === 'file') content.push(...describeFile(it.path, !!readFile).blocks);
     } else if (it) content.push({ type: 'text', text: `[Icon under the orb: "${it.name}"${it.where ? ' in ' + it.where : ''}. Its location on disk could not be resolved (it may be a shortcut, a special folder or a cloud item).]` });
     if (shot) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: shot.b64 } });
-    content.push({ type: 'text', text: (shot ? ctxLine + '\n' : '') + text });
+    content.push({ type: 'text', text: (spoken ? '[Voice: the user said this out loud; your answer will be spoken]\n' : '') + (shot ? ctxLine + '\n' : '') + text });
     // las capturas y documentos antiguos se reemplazan por una nota (ahorra tokens)
     history = history.map(m => (m.role === 'user' && Array.isArray(m.content))
       ? { role: 'user', content: m.content.map(c => c.type === 'image' ? { type: 'text', text: '[earlier screenshot omitted]' }
@@ -394,7 +403,7 @@ ipcMain.handle('ask', async (_e, { text, withScreen, readFile }) => {
   } catch (err) {
     if (history.length && history[history.length - 1].role === 'user') history.pop();
     return { error: err.name === 'AbortError' ? 'stopped' : String(err.message || err) };
-  } finally { busy = false; abortCtl = null; setState(target ? 'locked' : 'idle'); }
+  } finally { busy = false; abortCtl = null; setState(voiceActive ? 'speaking' : target ? 'locked' : 'idle'); }
 });
 
 // ---------------- responder por ti (solo con autorización y con el usuario presente) ----------------
@@ -468,6 +477,51 @@ ipcMain.handle('draw-action', async (_e, { id, action, png }) => {
   d.decided = 'copied'; showPanel(false); return { error: 'typefail' };
 });
 
+// ---------------- voz: escuchar y hablar (solo Windows; voces y reconocimiento del propio Windows) ----------------
+let listening = false;
+ipcMain.handle('listen', async () => {
+  if (!IS_WIN) return { error: 'novoice' };
+  if (listening) return { error: 'busy' };
+  listening = true; setState('listening');
+  try {
+    const r = await psListen.ask('listen', 45000);
+    if (!r) return { error: 'cancel' };
+    if (r.error === 'privacy') shell.openExternal('ms-settings:privacy-speech');
+    else if (r.error === 'nomic') shell.openExternal('ms-settings:privacy-microphone');
+    return r;
+  } finally { listening = false; setState(target ? 'locked' : 'idle'); }
+});
+ipcMain.on('listen-cancel', () => { if (listening) { psListen.kill(); } });   // se reinicia solo en la próxima escucha
+ipcMain.handle('tts', async (_e, text, opt) => {
+  if (!IS_WIN || typeof text !== 'string' || !text.trim()) return { error: 'novoice' };
+  const b = s => Buffer.from(s, 'utf8').toString('base64');
+  const v = opt && typeof opt.voice === 'string' ? opt.voice : cfg.ttsVoice;
+  const rate = opt && typeof opt.rate === 'number' && opt.rate >= 0.6 && opt.rate <= 1.8 ? opt.rate : (cfg.ttsRate || 1);
+  const r = await psSpeak.ask(`say ${v ? b(v) : '-'} ${rate} ${b(text.slice(0, 1500))}`, 20000);
+  if (!r || !r.wav) return { error: 'tts' };
+  return { url: 'data:audio/wav;base64,' + r.wav };
+});
+ipcMain.on('voice-level', (_e, v) => bubbleWin?.webContents.send('wave', Array.isArray(v) ? v.slice(0, 48) : null));
+ipcMain.handle('voices', async () => { if (!IS_WIN) return []; const r = await psSpeak.ask('voices', 10000); return (r && r.voices) || []; });
+ipcMain.on('voice-state', (_e, s) => {
+  voiceActive = s === 'speaking'; listening = s === 'listening';
+  if (s === 'speaking' || s === 'listening') setState(s); else if (!busy) setState(target ? 'locked' : 'idle');
+});
+// Escuchar con el dictado de Windows (Windows + H), el mismo que el usuario ya usa: entiende muy bien el español.
+// 'start' trae el chat al frente (el texto dictado cae en su cuadro) y abre el dictado; 'stop' lo cierra.
+ipcMain.handle('vt', async (_e, action) => {
+  if (!IS_WIN) return { error: 'novoice' };
+  if (!cfg.allowTalk && action === 'start') return { error: 'talkoff' };
+  let hw = '0';
+  if (action === 'start') {
+    const h = panelWin.getNativeWindowHandle();
+    hw = h.length >= 8 ? h.readBigInt64LE(0).toString() : String(h.readInt32LE(0));
+    panelWin.focus(); panelWin.webContents.focus();
+  }
+  const r = await psRaw(`winh ${hw}`, 4000);
+  return { ok: !!(r && r.ok) };
+});
+
 // ---------------- atajo, ojos, actualizaciones ----------------
 function registerHotkey() {
   globalShortcut.unregisterAll();
@@ -476,6 +530,13 @@ function registerHotkey() {
       if (panelWin.isVisible() && panelWin.isFocused()) { panelWin.hide(); return; }
       const t = await foregroundWindow(); if (t) { target = t; pushTarget(); setState('locked'); }
       showPanel();
+    });
+  } catch {}
+  // atajo para hablarle: abre el chat y empieza a escuchar
+  try {
+    if (IS_WIN && cfg.allowTalk && cfg.voiceHotkey) globalShortcut.register(cfg.voiceHotkey, async () => {
+      if (!panelWin.isVisible()) { const t = await foregroundWindow(); if (t) { target = t; pushTarget(); setState('locked'); } showPanel(false); }
+      panelWin.webContents.send('voice-toggle');
     });
   } catch {}
 }
@@ -497,5 +558,5 @@ app.whenReady().then(() => {
   if (!cfg.onboarded || !ready()) setTimeout(() => { showPanel(false); panelWin.webContents.send('open-settings', { welcome: true }); }, 1200);
 });
 app.on('second-instance', () => showPanel());
-app.on('will-quit', () => { globalShortcut.unregisterAll(); psMain.kill(); psItems.kill(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); psMain.kill(); psItems.kill(); psListen.kill(); psSpeak.kill(); });
 app.on('window-all-closed', () => {});

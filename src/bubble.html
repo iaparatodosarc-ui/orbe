@@ -55,7 +55,7 @@
 <script src="orb-render.js"></script>
 <script>
 const ES=(navigator.language||'es').toLowerCase().startsWith('es');
-const L=ES?{drop:'Suéltame sobre una ventana…',look:'Mirando…',full:'Pantalla completa',see:'Viendo:'}:{drop:'Drop me on a window…',look:'Looking…',full:'Full screen',see:'Watching:'};
+const L=ES?{drop:'Suéltame sobre una ventana…',look:'Mirando…',full:'Pantalla completa',see:'Viendo:',listen:'Te escucho…'}:{drop:'Drop me on a window…',look:'Looking…',full:'Full screen',see:'Watching:',listen:'Listening…'};
 const $=id=>document.getElementById(id);
 const orb=$('orb'),body=$('body'),label=$('label'),fx=$('fx'),cv=$('cv');
 let dragging=false,moved=false,down=null,timer=null,target=null,labelT=null,eyeBusy=false,blinkBusy=false;
@@ -130,7 +130,10 @@ function frame(now){
   // la aureola cuenta lo que está pasando
   S.haloDash=appState==='scanning'||appState==='thinking';
   S.haloSpin=S.haloDash?t*(appState==='thinking'?2.2:1.2):0;
-  S.halo=appState==='speaking'?1.05+.35*Math.sin(t*7):appState==='locked'?1.15:appState==='idle'?.75:1;
+  // voz: la aureola sigue la señal de lo que Orbe dice
+  if(waveT){if(!S.wave||S.wave.length!==waveT.length)S.wave=waveT.map(()=>0);for(let i=0;i<waveT.length;i++)S.wave[i]+=(waveT[i]-S.wave[i])*.45;}
+  else if(S.wave){let m=0;for(let i=0;i<S.wave.length;i++){S.wave[i]*=.8;m=Math.max(m,S.wave[i]);}if(m<.01)S.wave=null;}
+  S.halo=appState==='speaking'?1.05+.35*Math.sin(t*7):appState==='listening'?1.3+.18*Math.sin(t*3.4):appState==='locked'?1.15:appState==='idle'?.75:1;
   OrbRender.draw(g2,120,175,S);
   requestAnimationFrame(frame);
 }
@@ -188,12 +191,14 @@ function hideLabel(ms){clearTimeout(labelT);labelT=setTimeout(()=>label.classLis
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function setTarget(t){target=t;if(!t)return;const it=t.item;setLabel(it?`<b>${it.kind==='folder'?'📁':it.kind==='file'?'📄':'🔹'}</b> ${esc(it.name)}`:`<b>${L.see}</b> ${esc(t.title)}`);}
 
-let lastState='idle';
+let lastState='idle',waveT=null;
+orbe.on('wave',w=>{waveT=Array.isArray(w)&&w.length?w:null;});
 orbe.on('target',t=>{setTarget(t);});
 orbe.on('sound',s=>{soundOn=!!s.on;vol=typeof s.volume==='number'?s.volume:.6;if(master)master.gain.value=vol*.4;});
 orbe.on('react',k=>react(k));
 orbe.on('state',s=>{
   if(lastState==='speaking'&&s!=='speaking'&&s!=='thinking')play('done');
+  if(s==='listening'){setLabel(`<b>🎤</b> ${L.listen}`);showLabel();}else if(lastState==='listening'){hideLabel(300);}
   lastState=s;
   appState=s;
 });

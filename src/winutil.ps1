@@ -5,6 +5,7 @@
 #   fg <pidExcluir>              -> ventana en primer plano
 #   item <x> <y>                -> icono/archivo/carpeta bajo el punto (escritorio o Explorador): {name,path,kind,where}
 #   paste <hwnd>                 -> trae esa ventana al frente y pulsa Ctrl+V (el texto ya esta en el portapapeles)
+#   winh <hwnd|0>                -> (trae esa ventana al frente y) pulsa Windows+H: abre/cierra el dictado de Windows
 # Respuesta: una linea JSON {hwnd,title,proc,x,y,w,h} / {ok:true|false} o {} si no hay.
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @"
@@ -73,10 +74,11 @@ public class OrbeWin {
     if (h == IntPtr.Zero || !Usable(h, exclude)) return null;
     return Make(h);
   }
-  // Trae la ventana al frente y pulsa Ctrl+V. No pulsa Enter: enviar siempre lo decide el usuario.
-  public static bool Paste(long hv) {
+  // Trae una ventana al frente (Windows no lo permite a cualquiera; este es el truco habitual).
+  public static bool Focus(long hv) {
     IntPtr h = new IntPtr(hv);
     if (!IsWindow(h)) return false;
+    if (GetForegroundWindow() == h) return true;
     if (IsIconic(h)) ShowWindow(h, 9);
     uint pid; uint fgThread = GetWindowThreadProcessId(GetForegroundWindow(), out pid);
     uint me = GetCurrentThreadId();
@@ -84,8 +86,18 @@ public class OrbeWin {
     keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero); // Alt: permite cambiar el foco
     BringWindowToTop(h); SetForegroundWindow(h);
     AttachThreadInput(me, fgThread, false);
-    Thread.Sleep(250);
-    if (GetForegroundWindow() != h) return false;
+    Thread.Sleep(150);
+    return GetForegroundWindow() == h;
+  }
+  // Windows + H: abre o cierra el dictado por voz de Windows en el cuadro de texto que tiene el foco.
+  public static void WinH() {
+    keybd_event(0x5B, 0, 1, UIntPtr.Zero); keybd_event(0x48, 0, 0, UIntPtr.Zero);
+    keybd_event(0x48, 0, 2, UIntPtr.Zero); keybd_event(0x5B, 0, 3, UIntPtr.Zero);
+  }
+  // Trae la ventana al frente y pulsa Ctrl+V. No pulsa Enter: enviar siempre lo decide el usuario.
+  public static bool Paste(long hv) {
+    if (!Focus(hv)) return false;
+    Thread.Sleep(100);
     keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x56, 0, 0, UIntPtr.Zero);
     keybd_event(0x56, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero);
     return true;
@@ -241,6 +253,12 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
       $r = $null
       try { $r = Get-ItemAt ([int]$p[1]) ([int]$p[2]) } catch { $r = $null }
       if ($r -ne $null) { Send-Reply $id ([pscustomobject]$r) } else { Send-Reply $id $null }
+      continue
+    }
+    if ($p[0] -eq 'winh') {
+      $ok = $true
+      try { if ([int64]$p[1] -ne 0) { $ok = [OrbeWin]::Focus([int64]$p[1]) }; [OrbeWin]::WinH() } catch { $ok = $false }
+      Send-Reply $id ([pscustomobject]@{ ok = $ok })
       continue
     }
     if ($p[0] -eq 'paste') {

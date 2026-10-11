@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
 <title>Orbe</title>
 <style>
 :root{--bg:#121214;--card:#1b1b1f;--line:#2c2c32;--fg:#f2f1ec;--mute:#8e8e95;--or:#ff5a1f;--user:#26262c}
@@ -43,6 +43,12 @@ textarea{flex:1;resize:none;background:var(--card);color:var(--fg);border:1px so
 textarea:focus{border-color:var(--or)}
 #send{background:var(--or);color:#111;border:none;border-radius:12px;height:42px;min-width:42px;padding:0 14px;font-weight:700;cursor:pointer}
 #send.stop{background:#33333a;color:var(--fg)}
+#mic{background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:12px;height:42px;min-width:42px;font-size:17px;cursor:pointer;position:relative}
+#mic:hover{border-color:var(--or)}
+#mic.on{background:var(--or);color:#111;border-color:var(--or);animation:micp 1.2s ease-in-out infinite}
+#mic.talk{border-color:var(--or);color:var(--or)}
+@keyframes micp{0%,100%{box-shadow:0 0 0 0 rgba(255,150,60,.55)}50%{box-shadow:0 0 0 8px rgba(255,150,60,0)}}
+#set select{width:100%;background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 11px;font:inherit;margin-top:4px;outline:none}
 #set{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;padding:18px;gap:12px;z-index:5;overflow:auto}
 #set.on{display:flex}
 #set h3{margin:0 0 4px}#set label{font-size:12px;color:var(--mute)}
@@ -92,6 +98,7 @@ textarea:focus{border-color:var(--or)}
     <button class="chip" data-i="c6"></button>
   </div>
   <footer>
+    <button id="mic" data-t="micT">🎤</button>
     <textarea id="inp" rows="1" data-ip="ph"></textarea>
     <button id="send">➤</button>
   </footer>
@@ -113,7 +120,13 @@ textarea:focus{border-color:var(--or)}
     <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sFiles"> <span data-i="files"></span></label>
     <div class="note" data-ih="filesNote"></div>
     <div class="sep"></div>
+    <label class="tog" style="color:var(--fg)" id="talkWrap"><input type="checkbox" id="sTalk"> <span data-i="talk"></span></label>
+    <div class="note" data-ih="talkNote" id="talkNoteEl"></div>
     <label class="tog" style="color:var(--fg)"><input type="checkbox" id="sVoice"> <span data-i="voice"></span></label>
+    <div id="vWrap"><label data-i="ttsVoice"></label><select id="sTts"></select>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><label data-i="rate" style="white-space:nowrap"></label><input type="range" id="sRate" min="0.8" max="1.5" step="0.05" style="flex:1"><a id="sTryV" data-i="tryV" style="cursor:pointer;color:var(--or);font-size:12px;white-space:nowrap"></a></div>
+      <label class="tog" style="color:var(--fg);margin-top:8px"><input type="checkbox" id="sConvo"> <span data-i="convo"></span></label>
+      <div class="note" data-ih="voiceNote"></div></div>
     <div class="note" data-ih="setNote"></div>
     <div class="note" id="sVer" style="opacity:.7"></div>
     <div class="row"><button class="btn g" id="sCancel" data-i="close"></button><button class="btn" id="sSave" data-i="save"></button></div>
@@ -125,7 +138,7 @@ const $=id=>document.getElementById(id);
 const ES=(navigator.language||'es').toLowerCase().startsWith('es');
 const T=ES?{
  live:'en vivo',see:'Ver',readc:'Leer contenido',folder:'Carpeta',file:'Archivo',icon:'Ícono',fc1:'¿Qué hay aquí?',fc2:'¿Qué es lo más pesado?',fc3:'Ayúdame a ordenarla',ff1:'¿Qué es este archivo?',ff2:'Resúmelo',draw:'Dibujo',pasteD:'🎨 Pegar en la ventana',saveD:'Guardar',pasted:'¡Listo! Lo pegué en la ventana.',savedD:'Dibujo guardado.',nopaste:'No pude pegarlo ahí; lo dejé copiado. Pégalo con Ctrl+V.',drawNote:'Abre Paint (u otra app), pon el orbe encima y toca Pegar.',c6:'Dibújame algo',ph:'Pregúntale a Orbe…  (Enter para enviar)',c1:'¿Qué ves aquí?',c2:'Resúmelo',c3:'Explícame este error',c4:'Ayúdame a responder',c5:'¿Qué hago ahora?',
- hint:'<b>Arrastra el orbe</b> sobre cualquier ventana o pestaña<br>y pregúntame lo que quieras sobre lo que ves.<br><br>Atajo: <b>Ctrl + Shift + Espacio</b> → mira la ventana activa.<br>Dictado por voz: <b>Win + H</b> en el cuadro de texto.',
+ hint:'<b>Arrastra el orbe</b> sobre cualquier ventana o pestaña<br>y pregúntame lo que quieras sobre lo que ves.<br><br>Atajo: <b>Ctrl + Shift + Espacio</b> → mira la ventana activa.<br>Para hablarle con tu voz, actívalo en ⚙.',
  setTitle:'Configuración',key:'API key de Claude (Anthropic)',keyNote1:'Créala en',keyNote2:'→ API Keys. Se guarda cifrada en este equipo. El uso de la API se cobra según consumo.',model:'Modelo de Claude',test:'Probar key',testing:'Probando…',testok:'✓ Funciona',
  mnote:'Opus responde mejor; Haiku es más rápido y barato.',sounds:'Sonidos del orbe',volume:'Volumen',reply:'Orbe puede escribir respuestas por mí',
  files:'Orbe puede ver mis carpetas y archivos',filesNote:'Solo en Windows. Al soltar el orbe sobre una carpeta o archivo, Orbe sabrá qué es y qué tiene dentro. <b>El contenido de un archivo solo se lee si además activas "Leer contenido"</b> en el panel. Nada se envía hasta que tú preguntas. Apagado = Orbe solo ve la captura de pantalla.',ver:'Versión',
@@ -139,13 +152,19 @@ const T=ES?{
  typefail:'No pude escribir en esa ventana; dejé la respuesta copiada. Pégala con Ctrl+V.',gone:'Ese borrador ya no existe.',
  badkey:'La API key no es válida. Revísala en ⚙.',forbidden:'Tu API key no tiene permiso para este modelo.',ratelimit:'Muchas preguntas seguidas. Espera unos segundos.',
  nocredit:'Tu cuenta de Anthropic no tiene saldo. Recárgala en console.anthropic.com → Billing.',badmodel:'Ese modelo no existe. Elige otro en ⚙.',overloaded:'Claude está muy ocupado ahora. Intenta de nuevo en un momento.',net:'Sin conexión a internet.',
+ talk:'Hablarle a Orbe con mi voz (micrófono)',talkNote:'Solo en Windows. Aparece el botón 🎤 y el atajo <b>Ctrl + Alt + Espacio</b>. Orbe usa el dictado de Windows solo cuando tú lo activas, y te responde con voz. Apagado = sin micrófono.',
+ micT:'Hablarle a Orbe (Ctrl + Alt + Espacio)',listening:'Te escucho… habla ahora',notheard:'No te escuché. Toca 🎤 y vuelve a intentarlo. (Si no apareció la barrita del dictado de Windows, revisa que funcione <b>Windows + H</b> en el Bloc de notas.)',heard:'🎤',novoice:'Hablarle a Orbe por ahora funciona solo en Windows.',
+ privacy:'Para que Orbe te escuche, Windows necesita un permiso: te abrí <b>Configuración → Privacidad → Voz</b>. Activa <b>"Reconocimiento de voz en línea"</b> y vuelve a tocar 🎤.',
+ nomic:'Windows no deja usar el micrófono. Te abrí la configuración: activa el micrófono para las aplicaciones de escritorio y vuelve a tocar 🎤.',voiceErr:'No pude usar el micrófono.',
+ ttsVoice:'Voz de Orbe',autoV:'Automática (Pablo)',rate:'Velocidad',tryV:'▶ Probar voz',tryText:'Hola, soy Orbe. Así sueno cuando te respondo.',convo:'Conversación continua: después de responder, vuelve a escucharme',
+ voiceNote:'Toca 🎤 (o <b>Ctrl + Alt + Espacio</b>) y habla; al hacer una pausa, Orbe envía tu pregunta y te responde en voz alta. Toca el orbe para que se calle. Usa el dictado por voz de Windows (Windows + H; necesita internet).',
  voice:'Leer respuestas en voz alta',setNote:'Atajo global: <b>Ctrl + Shift + Espacio</b>. Clic derecho sobre el orbe para más opciones o para salir.',close:'Cerrar',save:'Guardar',
  welcome:'<b>¡Bienvenido a Orbe!</b> 3 pasos:<br>1. Pega tu API key de Claude.<br>2. Arrastra el orbe sobre cualquier ventana.<br>3. Haz clic en el orbe y pregunta.',
  saved:'Listo, configuración guardada. Arrastra el orbe sobre una ventana y pregúntame algo.',newc:'Conversación nueva. ¿En qué te ayudo?',full:'Pantalla completa',
  nokey:'Falta tu API key de Claude. Ábrela en ⚙.',busy:'Espera a que termine la respuesta anterior.',stopped:'Detenido.',copy:'Copiar',copied:'¡Copiado!'
 }:{
  live:'live',see:'See',readc:'Read content',folder:'Folder',file:'File',icon:'Icon',fc1:'What is in here?',fc2:'What is the biggest?',fc3:'Help me organize it',ff1:'What is this file?',ff2:'Summarize it',draw:'Drawing',pasteD:'🎨 Paste in the window',saveD:'Save',pasted:'Done! I pasted it in the window.',savedD:'Drawing saved.',nopaste:'I could not paste it there; it is copied. Paste with Ctrl+V.',drawNote:'Open Paint (or another app), put the orb over it and tap Paste.',c6:'Draw me something',ph:'Ask Orbe…  (Enter to send)',c1:'What do you see?',c2:'Summarize it',c3:'Explain this error',c4:'Help me reply',c5:'What should I do next?',
- hint:'<b>Drag the orb</b> onto any window or tab<br>and ask me anything about what you see.<br><br>Shortcut: <b>Ctrl + Shift + Space</b> → look at the active window.',
+ hint:'<b>Drag the orb</b> onto any window or tab<br>and ask me anything about what you see.<br><br>Shortcut: <b>Ctrl + Shift + Space</b> → look at the active window.<br>To talk with your voice, turn it on in ⚙.',
  setTitle:'Settings',key:'Claude API key (Anthropic)',keyNote1:'Create it at',keyNote2:'→ API Keys. Stored encrypted on this device. API usage is billed per use.',model:'Claude model',test:'Test key',testing:'Testing…',testok:'✓ Works',
  mnote:'Opus answers best; Haiku is faster and cheaper.',sounds:'Orb sounds',volume:'Volume',reply:'Orbe can write replies for me',
  files:'Orbe can see my folders and files',filesNote:'Windows only. When you drop the orb on a folder or file, Orbe knows what it is and what is inside. <b>A file\'s content is only read if you also turn on "Read content"</b> in the panel. Nothing is sent until you ask. Off = Orbe only sees the screenshot.',ver:'Version',
@@ -159,6 +178,12 @@ const T=ES?{
  typefail:'I could not type in that window; the reply is copied. Paste it with Ctrl+V.',gone:'That draft no longer exists.',
  badkey:'The API key is not valid. Check it in ⚙.',forbidden:'Your API key cannot use this model.',ratelimit:'Too many questions in a row. Wait a few seconds.',
  nocredit:'Your Anthropic account has no credit. Top up at console.anthropic.com → Billing.',badmodel:'That model does not exist. Pick another in ⚙.',overloaded:'Claude is very busy right now. Try again in a moment.',net:'No internet connection.',
+ talk:'Talk to Orbe with my voice (microphone)',talkNote:'Windows only. Shows the 🎤 button and the <b>Ctrl + Alt + Space</b> shortcut. Orbe uses Windows voice typing only when you start it, and answers out loud. Off = no microphone.',
+ micT:'Talk to Orbe (Ctrl + Alt + Space)',listening:'Listening… speak now',notheard:'I did not hear you. Tap 🎤 and try again. (If the Windows voice typing bar did not appear, check that <b>Windows + H</b> works in Notepad.)',heard:'🎤',novoice:'Talking to Orbe currently works on Windows only.',
+ privacy:'Windows needs a permission so Orbe can hear you: I opened <b>Settings → Privacy → Speech</b>. Turn on <b>"Online speech recognition"</b> and tap 🎤 again.',
+ nomic:'Windows is blocking the microphone. I opened the settings: allow desktop apps to use the microphone and tap 🎤 again.',voiceErr:'I could not use the microphone.',
+ ttsVoice:'Orbe voice',autoV:'Automatic',rate:'Speed',tryV:'▶ Try voice',tryText:'Hi, I am Orbe. This is how I sound when I answer you.',convo:'Continuous conversation: listen again after answering',
+ voiceNote:'Tap 🎤 (or <b>Ctrl + Alt + Space</b>) and speak; when you pause, Orbe sends your question and answers out loud. Tap the orb to make it stop. Uses Windows voice typing (Windows + H; needs internet).',
  voice:'Read answers aloud',setNote:'Global shortcut: <b>Ctrl + Shift + Space</b>. Right-click the orb for more options or to quit.',close:'Close',save:'Save',
  welcome:'<b>Welcome to Orbe!</b> 3 steps:<br>1. Paste your Claude API key.<br>2. Drag the orb onto any window.<br>3. Click the orb and ask.',
  saved:'Settings saved. Drag the orb onto a window and ask me something.',newc:'New conversation. How can I help?',full:'Full screen',
@@ -167,6 +192,7 @@ const T=ES?{
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T[e.dataset.i]);
 document.querySelectorAll('[data-ih]').forEach(e=>e.innerHTML=T[e.dataset.ih]);
 document.querySelectorAll('[data-ip]').forEach(e=>e.placeholder=T[e.dataset.ip]);
+document.querySelectorAll('[data-t]').forEach(e=>e.title=T[e.dataset.t]);
 const ERR=c=>T[c]||c;
 
 const msgs=$('msgs'),inp=$('inp'),send=$('send');
@@ -190,20 +216,21 @@ function scroll(){msgs.scrollTop=msgs.scrollHeight;}
 function add(cls,html){$('hint')?.remove();const d=document.createElement('div');d.className='m '+cls;d.innerHTML=html;msgs.appendChild(d);scroll();return d;}
 function setBusy(b){busy=b;send.textContent=b?'■':'➤';send.classList.toggle('stop',b);}
 
-async function ask(text){
+async function ask(text,spoken){
   text=text.trim();if(!text||busy)return;
+  stopSpeech();spokenTurn=!!spoken;firstChunk=true;sayBuf='';inp.readOnly=!!spoken;
   inp.value='';autoGrow();
   const u=add('u','');const withScreen=$('withScreen').checked;
-  u.innerHTML=(withScreen?'<img alt="captura" style="display:none">':'')+esc(text).replace(/\n/g,'<br>');
+  u.innerHTML=(withScreen?'<img alt="captura" style="display:none">':'')+(spoken?T.heard+' ':'')+esc(text).replace(/\n/g,'<br>');
   pendingShot=u.querySelector('img');
   cur=add('a cursor','');curText='';setBusy(true);
-  const r=await orbe.ask(text,withScreen,$('readFile').checked);
+  const r=await orbe.ask(text,withScreen,$('readFile').checked,!!spoken);
   setBusy(false);cur.classList.remove('cursor');
-  if(r.error){if(!curText)cur.remove();add('err',esc(ERR(r.error)));if(r.error==='nokey')openSet();if(pendingShot&&!pendingShot.src)pendingShot.remove();}
-  else{if(r.text||curText){cur.innerHTML=md(r.text||curText);speak(r.text||curText);}else cur.remove();(r.cards||[]).forEach(c=>c.kind==='draw'?drawCard(c):card(c));}
-  cur=null;scroll();
+  if(r.error){if(!curText)cur.remove();add('err',esc(ERR(r.error)));if(r.error==='nokey')openSet();if(pendingShot&&!pendingShot.src)pendingShot.remove();if(r.error==='stopped')stopSpeech();}
+  else{if(r.text||curText){cur.innerHTML=md(r.text||curText);if(spokenTurn||voice){if(!curText&&r.text)feedSpeech(r.text,false);feedSpeech('',true);}}else cur.remove();(r.cards||[]).forEach(c=>c.kind==='draw'?drawCard(c):card(c));}
+  cur=null;scroll();checkSpeechDone();
 }
-orbe.on('delta',t=>{if(!cur)return;curText+=t;cur.innerHTML=md(curText);scroll();});
+orbe.on('delta',t=>{if(!cur)return;curText+=t;cur.innerHTML=md(curText);scroll();if(spokenTurn||voice)feedSpeech(t,false);});
 orbe.on('shot',url=>{if(pendingShot){if(url){pendingShot.src=url;pendingShot.style.display='block';}else pendingShot.remove();}});
 orbe.on('target',t=>showTarget(t));
 orbe.on('focus-input',()=>setTimeout(()=>inp.focus(),50));
@@ -222,9 +249,10 @@ function showTarget(t){
 orbe.getTarget().then(showTarget);
 
 send.onclick=()=>busy?orbe.stop():ask(inp.value);
-inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask(inp.value);}if(e.key==='Escape')orbe.hide();});
+inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask(inp.value);}if(e.key==='Escape'){if(speaking()||micState==='listening'){stopListening();stopSpeech();}else orbe.hide();}});
 function autoGrow(){inp.style.height='auto';inp.style.height=Math.min(140,inp.scrollHeight)+'px';}
 inp.addEventListener('input',autoGrow);
+inp.addEventListener('mousedown',()=>{if(micState!=='listening')inp.readOnly=false;});   // si quieres escribir mientras Orbe habla
 document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>ask(c.textContent));
 msgs.addEventListener('click',e=>{
   if(e.target.classList.contains('copy')){navigator.clipboard.writeText(e.target.nextElementSibling.textContent);e.target.textContent=T.copied;setTimeout(()=>e.target.textContent=T.copy,1200);}
@@ -236,9 +264,101 @@ $('bNew').onclick=()=>{orbe.newChat();msgs.innerHTML='';add('a',`<p>${T.newc}</p
 $('bShot').onclick=async()=>{const u=await orbe.recapture();if(u){$('zimg').src=u;$('zoom').style.display='grid';}};
 
 // voz
-function speak(t){if(!voice||!t)return;speechSynthesis.cancel();const clean=t.replace(/```[\s\S]*?```/g,' (código) ').replace(/[*#`>_-]/g,'');
-  const u=new SpeechSynthesisUtterance(clean);const lg=(navigator.language||'es').slice(0,2);const v=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase().startsWith(lg));if(v)u.voice=v;u.lang=v?.lang||navigator.language;u.rate=1.05;speechSynthesis.speak(u);}
-function setVoice(v){voice=v;$('bVoice').textContent=v?'🔊':'🔇';if(!v)speechSynthesis.cancel();}
+// Orbe habla frase por frase mientras Claude todavía escribe: empieza a hablar en ~1 s, sin esperar la respuesta completa.
+const mic=$('mic');const IS_WIN_UI=/Windows/.test(navigator.userAgent);
+let spokenTurn=false,firstChunk=true,sayBuf='',sayQ=[],playing=null,speakGen=0,micState='idle',convo=true,talkOn=false;
+function setTalk(v){talkOn=!!v&&IS_WIN_UI;mic.style.display=talkOn?'':'none';if(!talkOn){stopListening();}}
+setTalk(false);
+function cleanSpeech(t){return t.replace(/```[\s\S]*?(```|$)/g,' ').replace(/`([^`]*)`/g,'$1').replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')
+  .replace(/https?:\/\/\S+/g,'').replace(/\*\*|__|[*#>_~|]/g,'').replace(/^\s*[-•]\s+/gm,'').replace(/^\s*(\d+)[.)]\s+/gm,'$1. ')
+  .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,'').replace(/\s+/g,' ').trim();}
+function speaking(){return !!playing||sayQ.length>0;}
+function feedSpeech(delta,final){
+  sayBuf+=delta;
+  for(;;){
+    if(((sayBuf.match(/```/g)||[]).length%2)&&!final)break;           // dentro de un bloque de código: esperar a que cierre
+    const min=firstChunk?14:60;const re=/[.!?…:;](\s)|[.!?…](?=$)|\n/g;let m,cut=-1;
+    while((m=re.exec(sayBuf))){const end=m.index+m[0].length;const atEnd=end>=sayBuf.length&&!m[1]&&m[0]!=='\n';if(atEnd&&!final)break;if(end>=min){cut=end;break;}}
+    if(cut<0){if(final&&sayBuf.trim()){enqueueSpeech(sayBuf);sayBuf='';}break;}
+    enqueueSpeech(sayBuf.slice(0,cut));sayBuf=sayBuf.slice(cut);firstChunk=false;
+  }
+}
+function enqueueSpeech(t){const c=cleanSpeech(t);if(c.replace(/[^\p{L}\p{N}]/gu,'').length<1)return;
+  const it={text:c,p:IS_WIN_UI?orbe.tts(c):Promise.resolve(null)};sayQ.push(it);pumpSpeech(speakGen);}
+// audio por Web Audio: así se puede medir la voz y dibujarla en la aureola del orbe
+let actx=null,analyser=null,levelTimer=null,fbins=null,playingSrc=0;
+function audioCtx(){if(!actx){actx=new AudioContext();analyser=actx.createAnalyser();analyser.fftSize=256;analyser.smoothingTimeConstant=.55;analyser.connect(actx.destination);fbins=new Uint8Array(analyser.frequencyBinCount);}return actx;}
+async function playWav(url,it){
+  const ctx=audioCtx();if(ctx.state==='suspended')await ctx.resume();
+  const bin=Uint8Array.from(atob(url.slice(url.indexOf(',')+1)),c=>c.charCodeAt(0));
+  const buf=await ctx.decodeAudioData(bin.buffer);
+  const src=ctx.createBufferSource();src.buffer=buf;src.connect(analyser);if(it)it.src=src;
+  startLevels();playingSrc++;
+  return new Promise(res=>{src.onended=()=>{playingSrc=Math.max(0,playingSrc-1);if(!playingSrc)stopLevels();res();};src.start();});
+}
+function startLevels(){if(levelTimer)return;levelTimer=setInterval(()=>{
+  analyser.getByteFrequencyData(fbins);
+  const out=[];for(let i=1;i<=24;i++){const v=fbins[i]/255;out.push(Math.round(Math.min(1,Math.max(0,(v-.25)/.65))*100)/100);}  // ~180 Hz a 4,5 kHz: la voz
+  orbe.voiceLevel(out);},40);}
+function stopLevels(){if(levelTimer){clearInterval(levelTimer);levelTimer=null;}orbe.voiceLevel(null);}
+function sysSpeak(text){return new Promise(res=>{try{const u=new SpeechSynthesisUtterance(text);const lg=(navigator.language||'es').slice(0,2);
+  const v=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase().startsWith(lg));if(v)u.voice=v;u.lang=v?.lang||navigator.language;u.onend=u.onerror=res;speechSynthesis.speak(u);}catch{res();}});}
+async function pumpSpeech(gen){
+  if(playing||!sayQ.length)return;
+  const it=sayQ[0];playing=it;orbe.voiceState('speaking');mic.classList.add('talk');
+  const r=await it.p;if(gen!==speakGen)return;
+  if(r&&r.url){try{await playWav(r.url,it);}catch{await sysSpeak(it.text);}}
+  else await sysSpeak(it.text);
+  if(gen!==speakGen)return;
+  sayQ.shift();playing=null;
+  if(sayQ.length)pumpSpeech(gen);else checkSpeechDone();
+}
+function checkSpeechDone(){
+  if(speaking()||busy||sayBuf.trim())return;
+  mic.classList.remove('talk');orbe.voiceState('idle');inp.readOnly=false;
+  if(spokenTurn&&convo&&IS_WIN_UI){spokenTurn=false;setTimeout(()=>startListening(true),250);}
+  spokenTurn=false;
+}
+function stopSpeech(){speakGen++;for(const it of sayQ)try{it.src&&it.src.stop();}catch{}stopLevels();
+  sayQ=[];playing=null;sayBuf='';try{speechSynthesis.cancel();}catch{}mic.classList.remove('talk');orbe.voiceState('idle');}
+// Escuchar: Orbe abre el dictado de Windows (Windows + H) en su propio cuadro de texto y espera a que termines.
+// Cuando el texto deja de cambiar ~1,6 s, cierra el dictado y envía la pregunta. Mientras Orbe habla, el cuadro
+// queda de solo lectura, así el dictado nunca puede escribir lo que dice Pablo.
+let vtTimer=null,vtLast='',vtSince=0,vtStart=0;
+async function startListening(auto){
+  if(!IS_WIN_UI){add('err',T.novoice);return;}
+  if(micState==='listening'||busy)return;
+  stopSpeech();micState='listening';mic.classList.add('on');
+  inp.readOnly=false;inp.value='';autoGrow();inp.placeholder=T.listening;inp.focus();
+  orbe.voiceState('listening');
+  await orbe.vt('start');
+  if(micState!=='listening')return;
+  inp.focus();vtLast='';vtStart=vtSince=Date.now();
+  clearInterval(vtTimer);
+  vtTimer=setInterval(()=>{
+    const v=inp.value.trim();
+    if(v!==vtLast){vtLast=v;vtSince=Date.now();return;}
+    if(v&&Date.now()-vtSince>1600)finishListening(true,auto);
+    else if(!v&&Date.now()-vtStart>(auto?9000:14000))finishListening(false,auto);
+  },200);
+}
+async function finishListening(send,auto){
+  if(micState!=='listening')return;
+  clearInterval(vtTimer);micState='idle';mic.classList.remove('on');inp.placeholder=T.ph;
+  inp.readOnly=true;mic.focus();          // fuera del cuadro de texto: el dictado deja de escribir
+  await orbe.vt('stop');
+  orbe.voiceState('idle');
+  const text=inp.value.trim();
+  if(send&&text){ask(text,true);return;}
+  inp.readOnly=false;
+  if(!text&&!auto)add('a',`<p>${T.notheard}</p>`);   // en conversación continua, si nadie habla, Orbe se queda tranquilo
+}
+function stopListening(){if(micState==='listening'){inp.value='';finishListening(false,true);}}
+function micPress(){if(!talkOn)return;if(micState==='listening'){finishListening(true,false);return;}if(busy){orbe.stop();}stopSpeech();startListening(false);}
+mic.onclick=micPress;
+orbe.on('voice-toggle',micPress);
+orbe.on('voice-stop',()=>{stopListening();stopSpeech();spokenTurn=false;});
+function setVoice(v){voice=v;$('bVoice').textContent=v?'🔊':'🔇';if(!v&&!spokenTurn)stopSpeech();}
 $('bVoice').onclick=async()=>{setVoice(!voice);await orbe.setCfg({voice});};
 
 // borradores de respuesta (responder por ti)
@@ -278,14 +398,18 @@ function drawCard(c){
 async function openSet(welcome){const c=await orbe.getCfg();$('sKey').value=c.apiKey||'';$('sModel').value=c.model||'';
   $('mlist').innerHTML=(c.models||[]).map(m=>`<option value="${m.id}">${esc(m.label)}</option>`).join('');$('mnote').textContent=T.mnote;
   $('sVoice').checked=!!c.voice;$('sSounds').checked=c.sounds!==false;$('sVol').value=c.volume??.6;$('sReply').checked=!!c.allowReply;$('sFiles').checked=!!c.allowFiles;$('sVer').textContent=T.ver+' '+(c.version||'');$('sTestR').textContent='';
+  $('vWrap').style.display=IS_WIN_UI?'':'none';$('talkWrap').style.display=$('talkNoteEl').style.display=IS_WIN_UI?'':'none';$('sTalk').checked=!!c.allowTalk;$('sRate').value=c.ttsRate||1;$('sConvo').checked=c.convo!==false;
+  if(IS_WIN_UI){const vs=await orbe.voices();const sel=$('sTts');vs.sort((a,b)=>(b.lang.startsWith('es')-a.lang.startsWith('es')));
+    sel.innerHTML=`<option value="">${T.autoV}</option>`+vs.map(v=>`<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');sel.value=c.ttsVoice||'';}
   $('welcome').style.display=(welcome||!c.onboarded)?'':'none';
   $('set').classList.add('on');setTimeout(()=>$('sKey').focus(),50);}
 $('bSet').onclick=()=>openSet(false);$('sCancel').onclick=()=>$('set').classList.remove('on');
 $('lnk').onclick=()=>orbe.openUrl('https://console.anthropic.com/settings/keys');
-function cfgFromForm(){return{apiKey:$('sKey').value,model:$('sModel').value,voice:$('sVoice').checked,sounds:$('sSounds').checked,volume:+$('sVol').value,allowReply:$('sReply').checked,allowFiles:$('sFiles').checked,onboarded:true};}
+function cfgFromForm(){return{apiKey:$('sKey').value,model:$('sModel').value,voice:$('sVoice').checked,sounds:$('sSounds').checked,volume:+$('sVol').value,allowReply:$('sReply').checked,allowFiles:$('sFiles').checked,ttsVoice:$('sTts').value||'',ttsRate:+$('sRate').value||1,convo:$('sConvo').checked,allowTalk:$('sTalk').checked,onboarded:true};}
 $('sTest').onclick=async()=>{$('sTestR').textContent=T.testing;await orbe.setCfg(cfgFromForm());const r=await orbe.testKey();$('sTestR').textContent=r.ok?T.testok:'⚠ '+ERR(r.error);};
 $('sSave').onclick=async()=>{await orbe.setCfg(cfgFromForm());
-  setVoice($('sVoice').checked);$('set').classList.remove('on');add('a',`<p>${T.saved}</p>`);};
-orbe.getCfg().then(c=>setVoice(!!c.voice));
+  setVoice($('sVoice').checked);convo=$('sConvo').checked;setTalk($('sTalk').checked);$('set').classList.remove('on');add('a',`<p>${T.saved}</p>`);};
+orbe.getCfg().then(c=>{setVoice(!!c.voice);convo=c.convo!==false;setTalk(c.allowTalk);});
+$('sTryV').onclick=async()=>{stopSpeech();const r=await orbe.tts(T.tryText,{voice:$('sTts').value||'',rate:+$('sRate').value||1});if(r&&r.url){orbe.voiceState('speaking');playWav(r.url,null).catch(()=>{}).then(()=>orbe.voiceState('idle'));}else sysSpeak(T.tryText);};
 </script>
 </body></html>

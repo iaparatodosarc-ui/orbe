@@ -9,7 +9,15 @@ contextBridge.exposeInMainWorld('orbe', {
   click: () => ipcRenderer.send('bubble-click'),
   menu: () => ipcRenderer.send('bubble-menu'),
   // panel
-  ask: (text, withScreen, readFile) => ipcRenderer.invoke('ask', { text, withScreen, readFile }),
+  ask: (text, withScreen, readFile, spoken) => ipcRenderer.invoke('ask', { text, withScreen, readFile, spoken }),
+  // voz
+  listen: () => ipcRenderer.invoke('listen'),
+  listenCancel: () => ipcRenderer.send('listen-cancel'),
+  tts: (text, opt) => ipcRenderer.invoke('tts', text, opt),
+  voices: () => ipcRenderer.invoke('voices'),
+  voiceState: s => ipcRenderer.send('voice-state', s),
+  vt: action => ipcRenderer.invoke('vt', action),
+  voiceLevel: v => ipcRenderer.send('voice-level', v),
   stop: () => ipcRenderer.send('stop'),
   newChat: () => ipcRenderer.send('new-chat'),
   hide: () => ipcRenderer.send('panel-hide'),
