@@ -52,12 +52,14 @@ const res = p => app.isPackaged ? p.replace('app.asar', 'app.asar.unpacked') : p
 // Ayudante de Windows (PowerShell). Hay dos: uno para ventanas/pegar y otro para íconos (que puede tardar más),
 // así una búsqueda lenta nunca bloquea a la otra. Cada pedido lleva un id y su respuesta vuelve con el mismo id.
 class PsWorker {
-  constructor(script = 'winutil.ps1') { this.script = script; this.p = null; this.buf = ''; this.pending = new Map(); this.seq = 0; }
+  constructor(script = 'winutil.ps1') { this.script = script; this.timeouts = 0; this.p = null; this.buf = ''; this.pending = new Map(); this.seq = 0; }
   start() {
     if (!IS_WIN) return;
-    this.p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', res(path.join(__dirname, this.script))], { windowsHide: true });
-    this.p.stdout.setEncoding('utf8');
-    this.p.stdout.on('data', d => {
+    const proc = this.p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', res(path.join(__dirname, this.script))], { windowsHide: true });
+    this.buf = '';
+    proc.stdout.setEncoding('utf8');
+    proc.stdout.on('data', d => {
+      if (this.p !== proc) return;
       this.buf += d; let i;
       while ((i = this.buf.indexOf('\n')) >= 0) {
         const line = this.buf.slice(0, i).trim(); this.buf = this.buf.slice(i + 1);
@@ -67,14 +69,16 @@ class PsWorker {
         done(o);
       }
     });
-    this.p.on('exit', () => { this.p = null; for (const d of [...this.pending.values()]) d(null); });
+    proc.on('exit', () => { if (this.p !== proc) return; this.p = null; for (const d of [...this.pending.values()]) d(null); });
+    proc.on('error', () => { if (this.p === proc) this.p = null; });
   }
   ask(cmd, ms = 6000) {
     return new Promise(resolve => {
       if (!this.p) this.start(); if (!this.p) return resolve(null);
       const id = String(++this.seq);
-      const done = v => { clearTimeout(timer); this.pending.delete(id); resolve(v); };
-      const timer = setTimeout(() => done(null), ms);
+      const done = v => { clearTimeout(timer); this.pending.delete(id); if (v) this.timeouts = 0; resolve(v); };
+      // si un pedido se demora demasiado, el PowerShell se reinicia: así un atasco nunca deja a Orbe sin ver ventanas
+      const timer = setTimeout(() => { done(null); if (++this.timeouts >= 2) { this.timeouts = 0; this.kill(); this.p = null; } }, ms);
       this.pending.set(id, done);
       try { this.p.stdin.write(id + ' ' + cmd + '\n'); } catch { done(null); }
     });
@@ -83,8 +87,8 @@ class PsWorker {
 }
 const psMain = new PsWorker(), psItems = new PsWorker();
 // voz: uno escucha y otro prepara el audio, así hablar y escuchar nunca se bloquean entre sí
-const psListen = new PsWorker('voice.ps1'), psSpeak = new PsWorker('voice.ps1');
-function startPs() { psMain.start(); psItems.start(); psSpeak.start(); }
+const psListen = new PsWorker('voice.ps1'), psSpeak = new PsWorker('voice.ps1'), psKeys = new PsWorker();
+function startPs() { psMain.start(); psItems.start(); psSpeak.start(); psKeys.start(); }
 const psRaw = (cmd, ms) => psMain.ask(cmd, ms);
 async function psWin(cmd) { const o = await psRaw(cmd); return o && o.title !== undefined ? { ...o, physical: true } : null; }
 function run(cmd, args, input) {
@@ -166,7 +170,7 @@ function createBubble() {
 function createPanel() {
   panelWin = new BrowserWindow({
     width: 440, height: 660, show: false, frame: false, transparent: true, resizable: true, minWidth: 360, minHeight: 420,
-    alwaysOnTop: true, backgroundColor: '#00000000', title: 'Orbe', webPreferences,
+    alwaysOnTop: true, backgroundColor: '#00000000', title: 'Orbe', webPreferences: { ...webPreferences, backgroundThrottling: false },   // sigue hablando aunque el chat esté cerrado
   });
   panelWin.setAlwaysOnTop(true, 'floating');
   panelWin.loadFile(path.join(__dirname, 'panel.html'));
@@ -223,6 +227,7 @@ async function findItemUnder(c, t, my) {
 }
 let voiceActive = false;
 ipcMain.on('bubble-click', () => {
+  if (hf) { bubbleWin.webContents.send('sink-stop'); endHandsFree(); panelWin.webContents.send('voice-stop'); return; }
   if (voiceActive || listening) { panelWin.webContents.send('voice-stop'); return; }   // tocar el orbe lo hace callar o dejar de escuchar
   if (panelWin.isVisible()) panelWin.hide(); else showPanel();
 });
@@ -230,7 +235,7 @@ ipcMain.on('bubble-menu', () => {
   const es = app.getLocale().startsWith('es');
   Menu.buildFromTemplate([
     { label: es ? 'Abrir chat' : 'Open chat', click: () => showPanel() },
-    ...(IS_WIN && cfg.allowTalk ? [{ label: es ? '🎤 Hablarle (Ctrl + Alt + Espacio)' : '🎤 Talk (Ctrl + Alt + Space)', click: () => { showPanel(false); panelWin.webContents.send('voice-toggle'); } }] : []),
+    ...(IS_WIN && cfg.allowTalk ? [{ label: es ? '🎤 Hablarle (Ctrl + Alt + Espacio)' : '🎤 Talk (Ctrl + Alt + Space)', click: () => voiceEntry() }] : []),
     { label: es ? 'Fijar ventana bajo el orbe' : 'Lock window under orb', click: () => lockUnderBubble() },
     { label: es ? 'Olvidar ventana o archivo (pantalla completa)' : 'Forget window or file (full screen)', click: () => { target = null; pushTarget(); setState('idle'); } },
     { type: 'separator' },
@@ -512,15 +517,43 @@ ipcMain.on('voice-state', (_e, s) => {
 ipcMain.handle('vt', async (_e, action) => {
   if (!IS_WIN) return { error: 'novoice' };
   if (!cfg.allowTalk && action === 'start') return { error: 'talkoff' };
-  let hw = '0';
-  if (action === 'start') {
-    const h = panelWin.getNativeWindowHandle();
-    hw = h.length >= 8 ? h.readBigInt64LE(0).toString() : String(h.readInt32LE(0));
-    panelWin.focus(); panelWin.webContents.focus();
-  }
-  const r = await psRaw(`winh ${hw}`, 4000);
+  if (action === 'start') { if (!panelWin.isVisible()) panelWin.show(); panelWin.focus(); panelWin.webContents.focus(); await sleep(120); }
+  // va por su propio PowerShell: aunque algo se demore, nunca bloquea la detección de ventanas ni el pegar
+  const r = await psKeys.ask(`winh ${process.pid}`, 3000);
   return { ok: !!(r && r.ok) };
 });
+
+// ---------------- manos libres: hablarle al orbe con el chat cerrado ----------------
+// El dictado de Windows escribe en un cuadro invisible del propio orbe; al terminar, Orbe devuelve el foco
+// a la ventana donde estabas y responde con voz. Funciona sobre cualquier ventana, carpeta o archivo.
+let hf = null;
+function voiceEntry() {
+  if (!IS_WIN || !cfg.allowTalk) return;
+  if (panelWin.isVisible()) { panelWin.webContents.send('voice-toggle'); return; }
+  if (hf) { bubbleWin.webContents.send('sink-stop'); endHandsFree(); return; }
+  if (voiceActive) panelWin.webContents.send('voice-stop');
+  startHandsFree(false);
+}
+async function startHandsFree(auto) {
+  if (!IS_WIN || !cfg.allowTalk || hf || busy) return;
+  const prev = await psRaw(`fg ${process.pid}`, 2000);
+  hf = { prev: prev && prev.hwnd, auto };
+  bubbleWin.setFocusable(true); bubbleWin.focus(); bubbleWin.webContents.focus();
+  bubbleWin.webContents.send('sink-start', { auto });
+  listening = true; setState('listening');
+  await sleep(150);
+  const r = await psKeys.ask(`winh ${process.pid}`, 3000);
+  if (!r || !r.ok) { bubbleWin.webContents.send('sink-stop'); hf.noClose = true; endHandsFree(); }
+}
+async function endHandsFree() {
+  if (!hf) return; const h = hf; hf = null;
+  if (!h.noClose) await psKeys.ask(`winh ${process.pid}`, 3000);   // cierra el dictado (solo si Orbe sigue al frente)
+  bubbleWin.setFocusable(false);
+  if (h.prev) psKeys.ask(`focus ${h.prev}`, 3000);                  // de vuelta a tu ventana
+  listening = false; if (!busy && !voiceActive) setState(target ? 'locked' : 'idle');
+}
+ipcMain.on('sink-text', async (_e, text) => { await endHandsFree(); if (typeof text === 'string' && text.trim()) panelWin.webContents.send('voice-ask', text.trim().slice(0, 2000)); });
+ipcMain.on('hands-free', () => { if (!panelWin.isVisible()) startHandsFree(true); });
 
 // ---------------- atajo, ojos, actualizaciones ----------------
 function registerHotkey() {
@@ -535,8 +568,7 @@ function registerHotkey() {
   // atajo para hablarle: abre el chat y empieza a escuchar
   try {
     if (IS_WIN && cfg.allowTalk && cfg.voiceHotkey) globalShortcut.register(cfg.voiceHotkey, async () => {
-      if (!panelWin.isVisible()) { const t = await foregroundWindow(); if (t) { target = t; pushTarget(); setState('locked'); } showPanel(false); }
-      panelWin.webContents.send('voice-toggle');
+      voiceEntry();
     });
   } catch {}
 }
@@ -558,5 +590,5 @@ app.whenReady().then(() => {
   if (!cfg.onboarded || !ready()) setTimeout(() => { showPanel(false); panelWin.webContents.send('open-settings', { welcome: true }); }, 1200);
 });
 app.on('second-instance', () => showPanel());
-app.on('will-quit', () => { globalShortcut.unregisterAll(); psMain.kill(); psItems.kill(); psListen.kill(); psSpeak.kill(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); psMain.kill(); psItems.kill(); psListen.kill(); psSpeak.kill(); psKeys.kill(); });
 app.on('window-all-closed', () => {});

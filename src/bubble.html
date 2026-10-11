@@ -192,6 +192,18 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','
 function setTarget(t){target=t;if(!t)return;const it=t.item;setLabel(it?`<b>${it.kind==='folder'?'📁':it.kind==='file'?'📄':'🔹'}</b> ${esc(it.name)}`:`<b>${L.see}</b> ${esc(t.title)}`);}
 
 let lastState='idle',waveT=null;
+// manos libres: el dictado de Windows escribe aquí (invisible) mientras el chat está cerrado
+const sink=document.createElement('textarea');sink.setAttribute('aria-hidden','true');
+sink.style.cssText='position:absolute;left:0;top:0;width:4px;height:4px;opacity:.01;border:0;padding:0;resize:none;background:transparent;color:transparent;outline:none';
+document.body.appendChild(sink);
+let sinkT=null,sinkLast='',sinkSince=0,sinkStart=0,sinkAuto=false;
+function sinkFinish(v){clearInterval(sinkT);sinkT=null;sink.blur();hideLabel(v?2500:300);orbe.sinkText(v);}
+orbe.on('sink-start',o=>{sinkAuto=!!(o&&o.auto);sink.value='';sink.focus();sinkLast='';sinkStart=sinkSince=Date.now();clearInterval(sinkT);
+  setLabel(`<b>🎤</b> ${L.listen}`);showLabel();
+  sinkT=setInterval(()=>{if(document.activeElement!==sink)sink.focus();const v=sink.value.trim();
+    if(v!==sinkLast){sinkLast=v;sinkSince=Date.now();if(v){setLabel(`<b>🎤</b> ${esc(v.length>90?'…'+v.slice(-90):v)}`);showLabel();}return;}
+    if(v&&Date.now()-sinkSince>1600)sinkFinish(v);else if(!v&&Date.now()-sinkStart>(sinkAuto?9000:14000))sinkFinish('');},200);});
+orbe.on('sink-stop',()=>{if(sinkT){clearInterval(sinkT);sinkT=null;sink.value='';sink.blur();hideLabel(300);}});
 orbe.on('wave',w=>{waveT=Array.isArray(w)&&w.length?w:null;});
 orbe.on('target',t=>{setTarget(t);});
 orbe.on('sound',s=>{soundOn=!!s.on;vol=typeof s.volume==='number'?s.volume:.6;if(master)master.gain.value=vol*.4;});

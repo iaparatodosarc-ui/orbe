@@ -152,7 +152,7 @@ const T=ES?{
  typefail:'No pude escribir en esa ventana; dejé la respuesta copiada. Pégala con Ctrl+V.',gone:'Ese borrador ya no existe.',
  badkey:'La API key no es válida. Revísala en ⚙.',forbidden:'Tu API key no tiene permiso para este modelo.',ratelimit:'Muchas preguntas seguidas. Espera unos segundos.',
  nocredit:'Tu cuenta de Anthropic no tiene saldo. Recárgala en console.anthropic.com → Billing.',badmodel:'Ese modelo no existe. Elige otro en ⚙.',overloaded:'Claude está muy ocupado ahora. Intenta de nuevo en un momento.',net:'Sin conexión a internet.',
- talk:'Hablarle a Orbe con mi voz (micrófono)',talkNote:'Solo en Windows. Aparece el botón 🎤 y el atajo <b>Ctrl + Alt + Espacio</b>. Orbe usa el dictado de Windows solo cuando tú lo activas, y te responde con voz. Apagado = sin micrófono.',
+ talk:'Hablarle a Orbe con mi voz (micrófono)',vtfail:'No pude abrir el dictado: haz clic en el chat de Orbe y vuelve a tocar 🎤.',talkNote:'Solo en Windows. Aparece el botón 🎤 y el atajo <b>Ctrl + Alt + Espacio</b>. Orbe usa el dictado de Windows solo cuando tú lo activas, y te responde con voz. Apagado = sin micrófono.',
  micT:'Hablarle a Orbe (Ctrl + Alt + Espacio)',listening:'Te escucho… habla ahora',notheard:'No te escuché. Toca 🎤 y vuelve a intentarlo. (Si no apareció la barrita del dictado de Windows, revisa que funcione <b>Windows + H</b> en el Bloc de notas.)',heard:'🎤',novoice:'Hablarle a Orbe por ahora funciona solo en Windows.',
  privacy:'Para que Orbe te escuche, Windows necesita un permiso: te abrí <b>Configuración → Privacidad → Voz</b>. Activa <b>"Reconocimiento de voz en línea"</b> y vuelve a tocar 🎤.',
  nomic:'Windows no deja usar el micrófono. Te abrí la configuración: activa el micrófono para las aplicaciones de escritorio y vuelve a tocar 🎤.',voiceErr:'No pude usar el micrófono.',
@@ -178,7 +178,7 @@ const T=ES?{
  typefail:'I could not type in that window; the reply is copied. Paste it with Ctrl+V.',gone:'That draft no longer exists.',
  badkey:'The API key is not valid. Check it in ⚙.',forbidden:'Your API key cannot use this model.',ratelimit:'Too many questions in a row. Wait a few seconds.',
  nocredit:'Your Anthropic account has no credit. Top up at console.anthropic.com → Billing.',badmodel:'That model does not exist. Pick another in ⚙.',overloaded:'Claude is very busy right now. Try again in a moment.',net:'No internet connection.',
- talk:'Talk to Orbe with my voice (microphone)',talkNote:'Windows only. Shows the 🎤 button and the <b>Ctrl + Alt + Space</b> shortcut. Orbe uses Windows voice typing only when you start it, and answers out loud. Off = no microphone.',
+ talk:'Talk to Orbe with my voice (microphone)',vtfail:'I could not open voice typing: click on the Orbe chat and tap 🎤 again.',talkNote:'Windows only. Shows the 🎤 button and the <b>Ctrl + Alt + Space</b> shortcut. Orbe uses Windows voice typing only when you start it, and answers out loud. Off = no microphone.',
  micT:'Talk to Orbe (Ctrl + Alt + Space)',listening:'Listening… speak now',notheard:'I did not hear you. Tap 🎤 and try again. (If the Windows voice typing bar did not appear, check that <b>Windows + H</b> works in Notepad.)',heard:'🎤',novoice:'Talking to Orbe currently works on Windows only.',
  privacy:'Windows needs a permission so Orbe can hear you: I opened <b>Settings → Privacy → Speech</b>. Turn on <b>"Online speech recognition"</b> and tap 🎤 again.',
  nomic:'Windows is blocking the microphone. I opened the settings: allow desktop apps to use the microphone and tap 🎤 again.',voiceErr:'I could not use the microphone.',
@@ -316,7 +316,9 @@ async function pumpSpeech(gen){
 function checkSpeechDone(){
   if(speaking()||busy||sayBuf.trim())return;
   mic.classList.remove('talk');orbe.voiceState('idle');inp.readOnly=false;
-  if(spokenTurn&&convo&&IS_WIN_UI){spokenTurn=false;setTimeout(()=>startListening(true),250);}
+  // vuelve a escuchar solo si sigues en el chat de Orbe (si te fuiste a otra ventana, no te quita el foco)
+  // con el chat cerrado (manos libres), el orbe mismo vuelve a escucharte
+  if(spokenTurn&&convo&&IS_WIN_UI&&talkOn){spokenTurn=false;if(document.hasFocus())setTimeout(()=>{if(document.hasFocus())startListening(true);},250);else setTimeout(()=>orbe.handsFree(),250);}
   spokenTurn=false;
 }
 function stopSpeech(){speakGen++;for(const it of sayQ)try{it.src&&it.src.stop();}catch{}stopLevels();
@@ -331,8 +333,9 @@ async function startListening(auto){
   stopSpeech();micState='listening';mic.classList.add('on');
   inp.readOnly=false;inp.value='';autoGrow();inp.placeholder=T.listening;inp.focus();
   orbe.voiceState('listening');
-  await orbe.vt('start');
+  const vr=await orbe.vt('start');
   if(micState!=='listening')return;
+  if(!vr||!vr.ok){clearInterval(vtTimer);micState='idle';mic.classList.remove('on');inp.placeholder=T.ph;orbe.voiceState('idle');if(!auto)add('err',T.vtfail);return;}
   inp.focus();vtLast='';vtStart=vtSince=Date.now();
   clearInterval(vtTimer);
   vtTimer=setInterval(()=>{
@@ -357,6 +360,7 @@ function stopListening(){if(micState==='listening'){inp.value='';finishListening
 function micPress(){if(!talkOn)return;if(micState==='listening'){finishListening(true,false);return;}if(busy){orbe.stop();}stopSpeech();startListening(false);}
 mic.onclick=micPress;
 orbe.on('voice-toggle',micPress);
+orbe.on('voice-ask',t=>{if(!busy)ask(t,true);});
 orbe.on('voice-stop',()=>{stopListening();stopSpeech();spokenTurn=false;});
 function setVoice(v){voice=v;$('bVoice').textContent=v?'🔊':'🔇';if(!v&&!spokenTurn)stopSpeech();}
 $('bVoice').onclick=async()=>{setVoice(!voice);await orbe.setCfg({voice});};

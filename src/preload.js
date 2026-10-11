@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('orbe', {
   voiceState: s => ipcRenderer.send('voice-state', s),
   vt: action => ipcRenderer.invoke('vt', action),
   voiceLevel: v => ipcRenderer.send('voice-level', v),
+  sinkText: v => ipcRenderer.send('sink-text', v),
+  handsFree: () => ipcRenderer.send('hands-free'),
   stop: () => ipcRenderer.send('stop'),
   newChat: () => ipcRenderer.send('new-chat'),
   hide: () => ipcRenderer.send('panel-hide'),

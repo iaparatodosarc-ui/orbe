@@ -5,7 +5,8 @@
 #   fg <pidExcluir>              -> ventana en primer plano
 #   item <x> <y>                -> icono/archivo/carpeta bajo el punto (escritorio o Explorador): {name,path,kind,where}
 #   paste <hwnd>                 -> trae esa ventana al frente y pulsa Ctrl+V (el texto ya esta en el portapapeles)
-#   winh <hwnd|0>                -> (trae esa ventana al frente y) pulsa Windows+H: abre/cierra el dictado de Windows
+#   focus <hwnd>                 -> devuelve el foco a esa ventana
+#   winh <pid>                   -> pulsa Windows+H (abre/cierra el dictado de Windows) solo si la ventana activa es de ese proceso
 # Respuesta: una linea JSON {hwnd,title,proc,x,y,w,h} / {ok:true|false} o {} si no hay.
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @"
@@ -22,6 +23,7 @@ public class OrbeWin {
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr h);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
@@ -47,6 +49,11 @@ public class OrbeWin {
     int cloaked = 0; DwmGetWindowAttribute(h, 14, out cloaked, 4); if (cloaked != 0) return false;
     if (GetWindowTextLength(h) == 0) return false;
     uint pid; GetWindowThreadProcessId(h, out pid); if (pid == exclude) return false;
+    // capas invisibles de Windows (dictado Win+H, teclado tactil, emojis, menu Inicio, busqueda): cubren toda la
+    // pantalla aunque no se vean, asi que nunca cuentan como "la ventana bajo el orbe"
+    var cls = new StringBuilder(128); GetClassName(h, cls, 128);
+    string c = cls.ToString();
+    if (c == "Windows.UI.Core.CoreWindow" || c == "Shell_InputSwitchTopLevelWindow" || c == "XamlExplorerHostIslandWindow" || c == "ForegroundStaging") return false;
     return true;
   }
   static Info Make(IntPtr h) {
@@ -86,7 +93,7 @@ public class OrbeWin {
     keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero); // Alt: permite cambiar el foco
     BringWindowToTop(h); SetForegroundWindow(h);
     AttachThreadInput(me, fgThread, false);
-    Thread.Sleep(150);
+    for (int i = 0; i < 12; i++) { Thread.Sleep(50); if (GetForegroundWindow() == h) return true; }
     return GetForegroundWindow() == h;
   }
   // Windows + H: abre o cierra el dictado por voz de Windows en el cuadro de texto que tiene el foco.
@@ -256,8 +263,19 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
       continue
     }
     if ($p[0] -eq 'winh') {
-      $ok = $true
-      try { if ([int64]$p[1] -ne 0) { $ok = [OrbeWin]::Focus([int64]$p[1]) }; [OrbeWin]::WinH() } catch { $ok = $false }
+      # Solo pulsa Windows+H si la ventana activa es de Orbe: asi el dictado nunca se abre ni se cierra en otra app.
+      $ok = $false
+      try {
+        [uint32]$fpid = 0
+        [OrbeWin]::GetWindowThreadProcessId([OrbeWin]::GetForegroundWindow(), [ref]$fpid) | Out-Null
+        if ([uint32]$p[1] -eq 0 -or $fpid -eq [uint32]$p[1]) { [OrbeWin]::WinH(); $ok = $true }
+      } catch { $ok = $false }
+      Send-Reply $id ([pscustomobject]@{ ok = $ok })
+      continue
+    }
+    if ($p[0] -eq 'focus') {
+      $ok = $false
+      try { $ok = [OrbeWin]::Focus([int64]$p[1]) } catch { $ok = $false }
       Send-Reply $id ([pscustomobject]@{ ok = $ok })
       continue
     }
