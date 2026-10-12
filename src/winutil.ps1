@@ -6,7 +6,7 @@
 #   item <x> <y>                -> icono/archivo/carpeta bajo el punto (escritorio o Explorador): {name,path,kind,where}
 #   paste <hwnd>                 -> trae esa ventana al frente y pulsa Ctrl+V (el texto ya esta en el portapapeles)
 #   focus <hwnd>                 -> devuelve el foco a esa ventana
-#   winh <pid>                   -> pulsa Windows+H (abre/cierra el dictado de Windows) solo si la ventana activa es de ese proceso
+#   winh start <hwnd> | winh stop <hwnd1> <hwnd2> -> abre / cierra el dictado de Windows (Windows+H)
 # Respuesta: una linea JSON {hwnd,title,proc,x,y,w,h} / {ok:true|false} o {} si no hay.
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @"
@@ -263,14 +263,17 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
       continue
     }
     if ($p[0] -eq 'winh') {
-      # Solo pulsa Windows+H si la ventana activa es de Orbe: asi el dictado nunca se abre ni se cierra en otra app.
-      $ok = $false
+      # winh start <hwnd>: trae esa ventana de Orbe al frente y abre el dictado (Windows+H)
+      # winh stop <hwnd1> <hwnd2>: lo cierra solo si una ventana de Orbe sigue al frente (nunca toca otras apps)
+      $ok = $false; $fg = 0
       try {
-        [uint32]$fpid = 0
-        [OrbeWin]::GetWindowThreadProcessId([OrbeWin]::GetForegroundWindow(), [ref]$fpid) | Out-Null
-        if ([uint32]$p[1] -eq 0 -or $fpid -eq [uint32]$p[1]) { [OrbeWin]::WinH(); $ok = $true }
+        if ($p[1] -eq 'start') { [OrbeWin]::Focus([int64]$p[2]) | Out-Null; [OrbeWin]::WinH(); $ok = $true }
+        else {
+          $fg = [OrbeWin]::GetForegroundWindow().ToInt64()
+          if ($fg -eq [int64]$p[2] -or $fg -eq [int64]$p[3]) { [OrbeWin]::WinH(); $ok = $true }
+        }
       } catch { $ok = $false }
-      Send-Reply $id ([pscustomobject]@{ ok = $ok })
+      Send-Reply $id ([pscustomobject]@{ ok = $ok; fg = $fg })
       continue
     }
     if ($p[0] -eq 'focus') {
