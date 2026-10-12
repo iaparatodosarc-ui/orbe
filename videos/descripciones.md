@@ -17,3 +17,21 @@
 #orbe #ia #niños #maternidad #paternidad #dibujo #fyp #parati
 **Instagram:** Cuando la tecnología te hace reír en vez de estresarte 💛 Orbe dibuja lo que tus hijos imaginan y lo pega en Paint para que lo pinten. Compártelo con esa mamá o papá que necesita verlo 🎨
 #orbe #ia #niños #crianza #dibujo #familia #reels #inteligenciaartificial
+
+## Video 3 — "Guardián" (cyberpunk) · 07:40
+**TikTok (título):** Cómo detectar un correo de estafa con IA
+**TikTok:** Ese correo “URGENTE” era una estafa 🛡️🔴 Orbe ve lo que tienes en pantalla y te avisa cuando algo parece fraude, antes de que hagas clic. Asistente de IA gratis para Windows y Android. 👉 ¿Te ha llegado un correo así? 📩 Compártelo con quien siempre abre todos los links.
+#estafas #ciberseguridad #phishing #inteligenciaartificial #chile
+**Instagram:** Ese correo “URGENTE” era una estafa 🛡️🔴 Orbe es un asistente de IA gratis que mira tu pantalla contigo y te avisa cuando un correo o mensaje parece fraude. Windows y Android. 📩 Mándaselo a tus papás. 🔖 Guárdalo. Link en la bio.
+#estafas #ciberseguridad #phishing #inteligenciaartificial #seguridaddigital
+**YouTube (título):** Este correo era una ESTAFA y la IA me avisó a tiempo 🛡️
+**YouTube:** Cómo detectar correos de estafa (phishing) con Orbe, asistente de IA gratis para Windows y Android que ve tu pantalla y te alerta de fraudes. Funciona con Claude (Anthropic). Escena recreada con IA. #Shorts #estafas #ciberseguridad
+
+## Video 4 — "El abuelo" (realista emotivo) · 08:00
+**TikTok (título):** Mi abuelo logró una videollamada solo gracias a la IA
+**TikTok:** Estaba solo frente al computador… y logró llamar a su nieta 🥹 Orbe guía paso a paso a quien no se lleva bien con la tecnología, con voz y viendo su pantalla. Gratis para Windows y Android. 👉 Etiqueta a alguien que le enseñaría esto a su abuelo o abuela.
+#abuelos #adultosmayores #inteligenciaartificial #tecnologia #emocionante
+**Instagram:** Estaba solo y confundido… hasta que logró ver a su nieta 🥹 Orbe es un asistente de IA gratis que guía paso a paso, con voz, a quien le cuesta usar el computador. Windows y Android. 📩 Mándaselo a tu familia. Link en la bio.
+#abuelos #adultosmayores #inteligenciaartificial #familia #tecnologia
+**YouTube (título):** Mi abuelo no sabía usar el PC… hasta que la IA lo guió 🥹
+**YouTube:** Orbe es un asistente de IA gratis (Windows y Android) que guía paso a paso y con voz a los adultos mayores, por ejemplo para hacer una videollamada. Funciona con Claude (Anthropic). Escena recreada con IA. #Shorts #adultosmayores #inteligenciaartificial
