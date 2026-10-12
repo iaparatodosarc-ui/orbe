@@ -333,9 +333,8 @@ async function startListening(auto){
   stopSpeech();micState='listening';mic.classList.add('on');
   inp.readOnly=false;inp.value='';autoGrow();inp.placeholder=T.listening;inp.focus();
   orbe.voiceState('listening');
-  const vr=await orbe.vt('start');
+  await orbe.vt('start');
   if(micState!=='listening')return;
-  if(!vr||!vr.ok){clearInterval(vtTimer);micState='idle';mic.classList.remove('on');inp.placeholder=T.ph;orbe.voiceState('idle');if(!auto)add('err',T.vtfail);return;}
   inp.focus();vtLast='';vtStart=vtSince=Date.now();
   clearInterval(vtTimer);
   vtTimer=setInterval(()=>{

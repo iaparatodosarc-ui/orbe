@@ -6,7 +6,7 @@
 #   item <x> <y>                -> icono/archivo/carpeta bajo el punto (escritorio o Explorador): {name,path,kind,where}
 #   paste <hwnd>                 -> trae esa ventana al frente y pulsa Ctrl+V (el texto ya esta en el portapapeles)
 #   focus <hwnd>                 -> devuelve el foco a esa ventana
-#   winh start <hwnd> | winh stop <hwnd1> <hwnd2> -> abre / cierra el dictado de Windows (Windows+H)
+#   winh <hwnd|0>                -> (trae esa ventana al frente y) pulsa Windows+H: abre/cierra el dictado de Windows
 # Respuesta: una linea JSON {hwnd,title,proc,x,y,w,h} / {ok:true|false} o {} si no hay.
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @"
@@ -263,17 +263,10 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
       continue
     }
     if ($p[0] -eq 'winh') {
-      # winh start <hwnd>: trae esa ventana de Orbe al frente y abre el dictado (Windows+H)
-      # winh stop <hwnd1> <hwnd2>: lo cierra solo si una ventana de Orbe sigue al frente (nunca toca otras apps)
-      $ok = $false; $fg = 0
-      try {
-        if ($p[1] -eq 'start') { [OrbeWin]::Focus([int64]$p[2]) | Out-Null; [OrbeWin]::WinH(); $ok = $true }
-        else {
-          $fg = [OrbeWin]::GetForegroundWindow().ToInt64()
-          if ($fg -eq [int64]$p[2] -or $fg -eq [int64]$p[3]) { [OrbeWin]::WinH(); $ok = $true }
-        }
-      } catch { $ok = $false }
-      Send-Reply $id ([pscustomobject]@{ ok = $ok; fg = $fg })
+      # Igual que en la 3.2.0 (la version en que el dictado funcionaba): trae esa ventana al frente y pulsa Windows+H
+      $ok = $true
+      try { if ([int64]$p[1] -ne 0) { $ok = [OrbeWin]::Focus([int64]$p[1]) }; [OrbeWin]::WinH() } catch { $ok = $false }
+      Send-Reply $id ([pscustomobject]@{ ok = $ok })
       continue
     }
     if ($p[0] -eq 'focus') {

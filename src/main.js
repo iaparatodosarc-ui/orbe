@@ -124,7 +124,6 @@ const orbCenter = () => { const b = bubbleWin.getBounds(); return { x: b.x + BUB
 // ---------------- captura ----------------
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const hwndOf = w => { const h = w.getNativeWindowHandle(); return h.length >= 8 ? h.readBigInt64LE(0).toString() : String(h.readInt32LE(0)); };
-const vtCmd = (action, win) => action === 'start' ? `winh start ${hwndOf(win)}` : `winh stop ${hwndOf(panelWin)} ${hwndOf(bubbleWin)}`;
 async function capture(t) {
   if (t && (t.desktop || t.w == null)) t = null;   // escritorio: pantalla completa
   let dip = null;
@@ -516,13 +515,17 @@ ipcMain.on('voice-state', (_e, s) => {
 });
 // Escuchar con el dictado de Windows (Windows + H), el mismo que el usuario ya usa: entiende muy bien el español.
 // 'start' trae el chat al frente (el texto dictado cae en su cuadro) y abre el dictado; 'stop' lo cierra.
+// Exactamente igual que en la 3.2.0, donde el dictado funcionaba.
 ipcMain.handle('vt', async (_e, action) => {
   if (!IS_WIN) return { error: 'novoice' };
   if (!cfg.allowTalk && action === 'start') return { error: 'talkoff' };
-  if (action === 'start') { if (!panelWin.isVisible()) panelWin.show(); panelWin.focus(); panelWin.webContents.focus(); await sleep(120); }
-  // va por su propio PowerShell: aunque algo se demore, nunca bloquea la detección de ventanas ni el pegar
-  const r = await psKeys.ask(vtCmd(action, panelWin), 3000);
-  return { ok: action === 'stop' ? true : !!(r && r.ok) };
+  let hw = '0';
+  if (action === 'start') {
+    hw = hwndOf(panelWin);
+    panelWin.focus(); panelWin.webContents.focus();
+  }
+  const r = await psRaw(`winh ${hw}`, 4000);
+  return { ok: !!(r && r.ok) };
 });
 
 // ---------------- manos libres: hablarle al orbe con el chat cerrado ----------------
@@ -543,13 +546,12 @@ async function startHandsFree(auto) {
   bubbleWin.setFocusable(true); bubbleWin.focus(); bubbleWin.webContents.focus();
   bubbleWin.webContents.send('sink-start', { auto });
   listening = true; setState('listening');
-  await sleep(150);
-  const r = await psKeys.ask(vtCmd('start', bubbleWin), 3000);
+  const r = await psRaw(`winh ${hwndOf(bubbleWin)}`, 4000);
   if (!r || !r.ok) { bubbleWin.webContents.send('sink-stop'); hf.noClose = true; endHandsFree(); }
 }
 async function endHandsFree() {
   if (!hf) return; const h = hf; hf = null;
-  if (!h.noClose) await psKeys.ask(vtCmd('stop'), 3000);   // cierra el dictado (solo si Orbe sigue al frente)
+  if (!h.noClose) await psRaw('winh 0', 4000);   // cierra el dictado
   bubbleWin.setFocusable(false);
   if (h.prev) psKeys.ask(`focus ${h.prev}`, 3000);                  // de vuelta a tu ventana
   listening = false; if (!busy && !voiceActive) setState(target ? 'locked' : 'idle');
