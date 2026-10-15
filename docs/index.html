@@ -78,10 +78,10 @@ footer{padding:40px 0 60px;color:var(--mute);font-size:14px;border-top:1px solid
       <h1>Un asistente que <em>ve</em> lo que tú ves.</h1>
       <p class="lead">Orbe flota sobre tu pantalla. Ponlo sobre cualquier ventana, pestaña o app, y pregúntale lo que quieras: un error, un correo, una planilla, un formulario.</p>
       <div class="btns">
-        <a class="btn" id="mainBtn" href="#descargar">⬇ Descargar Orbe</a>
+        <a class="btn" id="mainBtn" href="#descargar">⬇ Descargar gratis</a>
         <a class="btn alt" href="#como">Cómo funciona</a>
       </div>
-      <p class="note">Windows · Android · Linux — hecho para Claude. Tócalo: cada vez reacciona distinto.</p>
+      <p class="note">Windows · Android · Linux. <b>Gratis, sin pagar nada:</b> elige una IA gratuita (NVIDIA, Gemini o Groq) o Ollama en tu propio PC. Tócalo: cada vez reacciona distinto.</p>
     </div>
     <div class="demo" id="demo" aria-hidden="true">
       <div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="ln" style="width:60%"></div><div class="ln" style="width:85%"></div>
@@ -104,24 +104,39 @@ footer{padding:40px 0 60px;color:var(--mute);font-size:14px;border-top:1px solid
 </div></section>
 
 <section id="descargar"><div class="wrap">
-  <h2>Descargar</h2>
-  <p class="sub" id="ver">Última versión</p>
+  <span class="tag">RECOMENDADA · 100% GRATIS</span>
+  <h2>Descargar Orbe — versión gratis</h2>
+  <p class="sub" id="ver">Usa una IA gratuita (NVIDIA, Google Gemini o Groq) o Ollama en tu propio PC. No necesitas pagar ni tener tarjeta.</p>
   <div class="dl">
-    <div class="card" data-os="win"><h3>Windows</h3><small>Windows 10 y 11 · instalador .exe</small>
+    <div class="card" data-os="win" data-repo="free"><h3>Windows</h3><small>Windows 10 y 11 · instalador .exe</small>
       <a class="btn" data-asset="Setup" href="#">Descargar para Windows</a>
       <small>Si aparece "Windows protegió tu PC": <b>Más información → Ejecutar de todas formas</b>.</small></div>
-    <div class="card" data-os="android"><h3>Android</h3><small>Android 8 o superior · archivo .apk</small>
+    <div class="card" data-os="android" data-repo="free"><h3>Android</h3><small>Android 8 o superior · archivo .apk</small>
       <a class="btn" data-asset=".apk" href="#">Descargar para Android</a>
       <small>Al abrirlo, permite instalar apps de este origen.</small></div>
-    <div class="card" data-os="linux"><h3>Linux</h3><small>AppImage · la mayoría de distribuciones</small>
+    <div class="card" data-os="linux" data-repo="free"><h3>Linux</h3><small>AppImage · la mayoría de distribuciones</small>
       <a class="btn" data-asset=".AppImage" href="#">Descargar para Linux</a>
       <small>Dale permiso de ejecución y ábrelo.</small></div>
+  </div>
+  <p class="note" style="margin-top:14px">¿Tienes Node.js? Instálala desde la terminal con un comando: <code style="background:var(--card);padding:3px 8px;border-radius:6px">npx orbe-app libre</code></p>
+
+  <div style="height:1px;background:var(--line);margin:46px 0 30px"></div>
+
+  <h3 style="font-size:20px;margin:0 0 6px">¿Prefieres usarla con Claude? <small style="font-weight:500;opacity:.7">(API de pago, externa)</small></h3>
+  <p class="sub" style="margin-top:0">Orbe se <b>probó y corrió perfecto con la API de pago de Claude</b> (Anthropic). La versión de arriba se dejó con APIs gratis y es de código abierto, para que cualquiera la use o la modifique a su gusto. Si quieres la máxima calidad de respuestas y tienes una API key de Claude, descarga esta:</p>
+  <div class="dl">
+    <div class="card" data-os="win" data-repo="pro"><h3>Windows</h3><small>Con tu API key de Claude · .exe</small>
+      <a class="btn alt" data-asset="Setup" href="#">Orbe (Claude) para Windows</a></div>
+    <div class="card" data-os="android" data-repo="pro"><h3>Android</h3><small>Con tu API key de Claude · .apk</small>
+      <a class="btn alt" data-asset=".apk" href="#">Orbe (Claude) para Android</a></div>
+    <div class="card" data-os="linux" data-repo="pro"><h3>Linux</h3><small>Con tu API key de Claude · AppImage</small>
+      <a class="btn alt" data-asset=".AppImage" href="#">Orbe (Claude) para Linux</a></div>
   </div>
 </div></section>
 
 <section><div class="wrap">
   <h2>Preguntas frecuentes</h2>
-  <details><summary>¿Es gratis?</summary><p>Orbe es gratis y de código abierto. Para usarlo con Claude necesitas tu propia API key de Anthropic, que se cobra según lo que uses. Si prefieres usarlo gratis, existe Orbe Libre.</p></details>
+  <details><summary>¿Es gratis?</summary><p>Sí. La versión recomendada es <b>100% gratis</b> y de código abierto: funciona con IAs gratuitas (NVIDIA, Google Gemini o Groq) o con Ollama en tu propio PC. Los planes gratis tienen límites de uso. Si prefieres la máxima calidad, existe aparte la versión con la API de pago de Claude (Anthropic), que se cobra según lo que uses.</p></details>
   <details><summary>¿Qué ve Orbe de mi pantalla?</summary><p>Solo envía una captura cuando tú le haces una pregunta con "Ver" activado. Puedes desactivarlo cuando quieras. Orbe no tiene servidores propios: habla directo con el proveedor de IA que elijas.</p></details>
   <details><summary>¿Dónde consigo la API key?</summary><p>En <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Pégala en Orbe la primera vez que lo abras.</p></details>
   <details><summary>¿Funciona en iPhone o Mac?</summary><p>Por ahora no. Orbe está disponible para Windows, Android y Linux.</p></details>
@@ -130,21 +145,22 @@ footer{padding:40px 0 60px;color:var(--mute);font-size:14px;border-top:1px solid
 <footer><div class="wrap">Orbe · Licencia MIT · Proyecto independiente, no afiliado a Anthropic. · <a id="ghLink2" href="#">GitHub</a></div></footer>
 
 <script>
-// Detecta el repositorio desde la URL de GitHub Pages: usuario.github.io/orbe → github.com/usuario/orbe
+// Dos versiones: gratis (orbe-libre) y de pago con Claude (orbe). Se detecta el usuario desde GitHub Pages.
 const host=location.hostname, user=host.endsWith('.github.io')?host.split('.')[0]:'', repo=(location.pathname.split('/')[1]||'orbe');
-const REPO=user?`${user}/${repo}`:'';
-const releases=REPO?`https://github.com/${REPO}/releases/latest`:'#';
-for(const id of ['ghLink','ghLink2'])document.getElementById(id).href=REPO?`https://github.com/${REPO}`:'#';
-document.querySelectorAll('[data-asset]').forEach(a=>a.href=releases);
-// Marca el sistema del visitante
+const REPOS={pro:user?`${user}/${repo}`:'', free:user?`${user}/orbe-libre`:''};
+const rel=k=>REPOS[k]?`https://github.com/${REPOS[k]}/releases/latest`:'#';
+for(const id of ['ghLink','ghLink2'])document.getElementById(id).href=REPOS.free?`https://github.com/${REPOS.free}`:'#';
+document.querySelectorAll('[data-asset]').forEach(a=>{const k=a.closest('[data-repo]')?.dataset.repo||'free';a.href=rel(k);});
+// Marca el sistema del visitante y ajusta el botón principal (siempre a la gratis)
 const ua=navigator.userAgent, os=/Android/i.test(ua)?'android':/Windows/i.test(ua)?'win':/Linux/i.test(ua)?'linux':'';
-if(os){const c=document.querySelector(`[data-os="${os}"]`);c&&c.classList.add('me');const b=document.getElementById('mainBtn');b.textContent='⬇ Descargar para '+({win:'Windows',android:'Android',linux:'Linux'})[os];}
-// Enlaces directos a los archivos de la última versión
-if(REPO)fetch(`https://api.github.com/repos/${REPO}/releases/latest`).then(r=>r.ok?r.json():null).then(j=>{
-  if(!j)return;document.getElementById('ver').textContent='Versión '+j.tag_name.replace(/^v/,'');
-  document.querySelectorAll('[data-asset]').forEach(a=>{const f=j.assets.find(x=>x.name.includes(a.dataset.asset)&&!x.name.endsWith('.blockmap'));if(f)a.href=f.browser_download_url;});
-  if(os){const f=document.querySelector(`[data-os="${os}"] [data-asset]`);if(f)document.getElementById('mainBtn').href=f.href;}
-}).catch(()=>{});
+if(os){document.querySelectorAll(`[data-os="${os}"]`).forEach(c=>c.classList.add('me'));const b=document.getElementById('mainBtn');b.textContent='⬇ Descargar gratis para '+({win:'Windows',android:'Android',linux:'Linux'})[os];}
+// Enlaces directos a los archivos de la última versión de cada repositorio
+function fill(k){if(!REPOS[k])return;fetch(`https://api.github.com/repos/${REPOS[k]}/releases/latest`).then(r=>r.ok?r.json():null).then(j=>{
+  if(!j)return;
+  document.querySelectorAll(`[data-repo="${k}"] [data-asset]`).forEach(a=>{const f=j.assets.find(x=>x.name.includes(a.dataset.asset)&&!x.name.endsWith('.blockmap'));if(f)a.href=f.browser_download_url;});
+  if(k==='free'&&os){const f=document.querySelector(`[data-repo="free"][data-os="${os}"] [data-asset]`);if(f)document.getElementById('mainBtn').href=f.href;}
+}).catch(()=>{});}
+fill('free');fill('pro');
 // Animación de la demo
 const orb=document.getElementById('orb'),chat=document.getElementById('chat');
 function loop(){chat.classList.remove('on');orb.style.left='78%';orb.style.top='70%';
