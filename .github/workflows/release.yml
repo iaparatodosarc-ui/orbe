@@ -82,10 +82,16 @@ jobs:
     needs: [windows, linux, android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
       - uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
+      - name: Empaquetar Orbe Motion
+        run: |
+          cd src && zip -r "../out/OrbeMotion-Windows-${GITHUB_REF_NAME#v}.zip" orbe-motion
       - uses: softprops/action-gh-release@v2
         with:
           name: Orbe ${{ github.ref_name }}
