@@ -42,3 +42,13 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
+dependencies {
+    // Bajar reels con un parpadeo: cámara + detector de rostro (todo local, sin internet salvo la descarga inicial del modelo)
+    implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.lifecycle:lifecycle-service:2.6.2")
+    implementation("androidx.core:core:1.12.0")
+}

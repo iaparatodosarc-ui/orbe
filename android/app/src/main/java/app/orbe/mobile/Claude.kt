@@ -17,6 +17,9 @@ object Prefs {
     fun volume(ctx: Context): Float = if (sounds(ctx)) of(ctx).getFloat("volume", 0.6f) else 0f
     /** "Orbe puede escribir respuestas por mí". Cada respuesta igual necesita que el usuario toque Autorizar. */
     fun allowReply(ctx: Context): Boolean = of(ctx).getBoolean("allowReply", false)
+    /** Gesto para bajar reels: parpadeo largo (por defecto) o doble parpadeo. */
+    fun blinkMode(ctx: Context): BlinkDetector.Mode =
+        if (of(ctx).getString("blinkMode", "LARGO") == "DOBLE") BlinkDetector.Mode.DOBLE else BlinkDetector.Mode.LARGO
     const val DEFAULT_MODEL = "claude-opus-5-5"
     val MODELS = listOf(
         "claude-opus-5-5" to "Opus 5.5 · el más capaz",

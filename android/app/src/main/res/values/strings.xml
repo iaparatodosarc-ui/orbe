@@ -2,4 +2,6 @@
 <resources>
     <string name="access_label">Orbe · escribir respuestas</string>
     <string name="access_desc">Permite que Orbe escriba en el cuadro de texto de la app que estás usando la respuesta que tú autorizaste. Orbe solo lo hace cuando tocas "Autorizar" en su tarjeta, con el teléfono desbloqueado, y nunca toca Enviar: el mensaje lo envías tú. No lee ni guarda nada más.</string>
+    <string name="blink_label">Orbe · parpadeo</string>
+    <string name="blink_desc">Permite que Orbe pase al siguiente reel cuando parpadeas. Solo consulta qué app tienes abierta (para encender la cámara únicamente en Instagram, Facebook, TikTok o YouTube) y solo hace un deslizamiento hacia arriba, con el teléfono desbloqueado. No lee textos ni contenido, y la cámara se analiza en el teléfono sin guardar ni enviar imágenes.</string>
 </resources>

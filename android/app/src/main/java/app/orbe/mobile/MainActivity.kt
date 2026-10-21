@@ -40,6 +40,10 @@ class MainActivity : Activity() {
     private lateinit var startBtn: Button
     private lateinit var accessBtn: Button
     private lateinit var replyBox: CheckBox
+    private lateinit var blinkModeBtn: Button
+    private lateinit var blinkAccessBtn: Button
+    private lateinit var blinkStartBtn: Button
+    private val REQ_CAMERA = 42
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
     private fun rounded(color: Int, r: Int, stroke: Int = 0) = GradientDrawable().apply {
@@ -117,6 +121,27 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         col.addView(accessBtn, btnLp())
+        // Paso 5 (opcional): bajar reels con un parpadeo
+        col.addView(step("5", "Bajar reels con un parpadeo"))
+        col.addView(TextView(this).apply {
+            text = "En Instagram, Facebook, TikTok o YouTube, cierra los ojos un momento y Orbe pasa al siguiente reel. La cámara frontal solo se enciende mientras una de esas apps está en pantalla, y las imágenes se analizan en tu teléfono: nunca se guardan ni se envían. Los parpadeos normales no cuentan."
+            setTextColor(MUTE); textSize = 12f; setPadding(0, 0, 0, dp(4))
+        })
+        blinkModeBtn = button("", false) {
+            val next = if (Prefs.blinkMode(this) == BlinkDetector.Mode.LARGO) "DOBLE" else "LARGO"
+            Prefs.of(this).edit().putString("blinkMode", next).apply()
+            if (BlinkService.running) startService(Intent(this, BlinkService::class.java))
+            refresh()
+        }
+        col.addView(blinkModeBtn, btnLp())
+        blinkAccessBtn = button("Dar permiso «Orbe · parpadeo»", false) {
+            toast("Busca «Orbe · parpadeo» en Accesibilidad y actívalo")
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        col.addView(blinkAccessBtn, btnLp())
+        blinkStartBtn = button("", true) { toggleBlink() }
+        col.addView(blinkStartBtn, btnLp())
+
         col.addView(TextView(this).apply {
             text = "Orbe es código abierto (MIT). El uso de la API de Claude se cobra según tu consumo, aparte de tu plan de Claude."
             setTextColor(MUTE); textSize = 11f; gravity = Gravity.CENTER; setPadding(0, dp(24), 0, 0)
@@ -137,6 +162,10 @@ class MainActivity : Activity() {
         startBtn.text = if (OrbeService.running) "✓ Orbe está activo (abrir chat)" else "▶  Iniciar Orbe"
         accessBtn.visibility = if (replyBox.isChecked) android.view.View.VISIBLE else android.view.View.GONE
         accessBtn.text = if (OrbeAccess.enabled) "✓ Permiso para escribir activo" else "Dar permiso para escribir"
+        blinkModeBtn.text = if (Prefs.blinkMode(this) == BlinkDetector.Mode.LARGO)
+            "Gesto: ojos cerrados medio segundo (tocar para cambiar)" else "Gesto: doble parpadeo rápido (tocar para cambiar)"
+        blinkAccessBtn.text = if (BlinkAccess.enabled) "✓ Permiso «Orbe · parpadeo» activo" else "Dar permiso «Orbe · parpadeo»"
+        blinkStartBtn.text = if (BlinkService.running) "■  Apagar control por parpadeo" else "👁  Encender control por parpadeo"
     }
 
     private fun save(): Boolean {
@@ -173,6 +202,30 @@ class MainActivity : Activity() {
         startForegroundService(i)
         toast("Orbe activo. Abre cualquier app y toca el orbe.")
         moveTaskToBack(true)
+    }
+
+    private fun toggleBlink() {
+        if (BlinkService.running) {
+            startService(Intent(this, BlinkService::class.java).setAction(BlinkService.ACTION_STOP))
+            blinkStartBtn.postDelayed({ refresh() }, 300)
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
+            return
+        }
+        if (!BlinkAccess.enabled) { toast("Falta el permiso «Orbe · parpadeo» (botón de arriba)"); return }
+        startForegroundService(Intent(this, BlinkService::class.java))
+        toast("Listo. Abre Instagram o Facebook y cierra los ojos un momento para pasar de reel.")
+        blinkStartBtn.postDelayed({ refresh() }, 300)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_CAMERA) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) toggleBlink()
+            else toast("Sin permiso de cámara no puedo ver tus parpadeos.")
+        }
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
