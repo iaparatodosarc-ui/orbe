@@ -21,6 +21,11 @@ Orbe es un pequeño orbe con un ojo que vive encima de todo en tu pantalla.
 
 Está hecho para **Claude** (API de Anthropic), con directrices escritas a medida para que Claude responda claro y simple, incluso a quien nunca ha usado IA.
 
+## Novedades en la 3.3
+
+- **👁 Baja reels con un parpadeo (Android):** en Instagram, Facebook, TikTok o YouTube, cierra los ojos medio segundo y Orbe pasa al siguiente reel (también puedes elegir *doble parpadeo*). Los parpadeos normales no cuentan. La cámara frontal solo se enciende mientras una de esas apps está en pantalla y todo se analiza **en el teléfono**: no se guardan ni se envían imágenes. Viene apagado; se activa en el paso 5, con su propio permiso «Orbe · parpadeo».
+- **🖐 Orbe Motion (Windows, beta):** controla el PC con gestos de la mano usando solo la cámara web: mover el cursor con el índice, clic con una pinza, arrastrar, desplazar, volumen, pausa/reproducir y activar Orbe abriendo la mano. Incluye un asistente de calibración para tu mano y tu cámara. 100% local y gratis. Descarga `OrbeMotion` en [Releases](../../releases/latest) o mira la carpeta [`orbe-motion`](orbe-motion/).
+
 ## Novedades en la 3.1
 
 - **Orbe entiende tus carpetas y archivos (Windows):** suelta el orbe sobre una carpeta o archivo del escritorio o del Explorador y pregúntale qué hay dentro: lista, tamaños, tipos, lo más pesado, cómo ordenarlo. Con **Leer contenido** activado puede leer y resumir el archivo (PDF, Word, Excel, PowerPoint, texto, imágenes). Solo se envía a Claude cuando tú preguntas.
